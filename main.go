@@ -1,19 +1,24 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
-	"github.com/harshitnarang28/Raven_Backend/internal/routes"
+	"github.com/RavenSec10/Raven_Backend/internal/routes"
 )
 
 func main() {
-	port := "8080"
 	router := gin.Default()
 
-	// Routes
-	routes.SetupRoutes(router)
+	// Add a root route for testing
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "Welcome to RAVEN API"})
+	})
 
-	fmt.Println("RAVEN Backend running on port", port)
-	log.Fatal(router.Run(":" + port))
+	// Register the upload route
+	router.POST("/upload", routes.UploadHAR)
+
+	log.Println("Server running on :8080")
+	router.Run(":8080")
 }

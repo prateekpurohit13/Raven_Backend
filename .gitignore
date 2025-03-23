@@ -1,0 +1,18 @@
+# Binaries
+*.exe
+*.out
+
+# Environment variables
+.env
+
+# Dependency folders
+node_modules/
+vendor/
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs and temporary files
+*.log
+*.tmp

@@ -1,11 +1,11 @@
-package harparser
+package har_parser
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 )
 
+// HAR struct (simplified, extend as needed)
 type HAR struct {
 	Log struct {
 		Entries []struct {
@@ -17,22 +17,18 @@ type HAR struct {
 	} `json:"log"`
 }
 
-func ParseHAR(filename string) (*HAR, error) {
-	file, err := os.ReadFile(filename)
+// ParseHAR reads and parses a HAR file
+func ParseHAR(filePath string) (*HAR, error) {
+	data, err := os.ReadFile(filePath) // UPDATED: Replaced ioutil.ReadAll
 	if err != nil {
 		return nil, err
 	}
 
 	var har HAR
-	if err := json.Unmarshal(file, &har); err != nil {
+	err = json.Unmarshal(data, &har)
+	if err != nil {
 		return nil, err
 	}
 
 	return &har, nil
-}
-
-func PrintHARData(har *HAR) {
-	for _, entry := range har.Log.Entries {
-		fmt.Println("Method:", entry.Request.Method, "| URL:", entry.Request.URL)
-	}
 }
