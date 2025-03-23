@@ -1,4 +1,4 @@
-module github.com/harshitnarang28/Raven_Backend
+module github.com/RavenSec10/Raven_Backend
 
 go 1.23.5
 
