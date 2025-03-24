@@ -32,3 +32,18 @@ func ParseHAR(filePath string) (*HAR, error) {
 
 	return &har, nil
 }
+
+// ExtractAPIInfo extracts specific API information from the parsed HAR data
+func ExtractAPIInfo(har *HAR) []map[string]interface{} {
+	apiInfoList := make([]map[string]interface{}, 0) // Initialize an empty slice
+
+	for _, entry := range har.Log.Entries {
+		apiInfo := map[string]interface{}{
+			"method": entry.Request.Method,
+			"url":    entry.Request.URL,
+		}
+		apiInfoList = append(apiInfoList, apiInfo)
+	}
+
+	return apiInfoList
+}
