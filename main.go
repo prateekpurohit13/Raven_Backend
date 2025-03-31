@@ -5,6 +5,7 @@ import (
 	//"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/RavenSec10/Raven_Backend/db"
 	"github.com/RavenSec10/Raven_Backend/internal/routes"
 	"github.com/RavenSec10/Raven_Backend/internal/services"
 	"github.com/RavenSec10/Raven_Backend/internal/handlers"
@@ -27,7 +28,7 @@ func main() {
 
 	// Register the upload route
 	//router.POST("/upload", harHandler.UploadHAR)
-
+	db.ConnectDB()
 	log.Println("Server running on :8080")
 	router.Run(":8080")
 }
