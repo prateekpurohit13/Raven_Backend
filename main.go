@@ -15,6 +15,11 @@ import (
 
 func main() {
 
+	err := db.ConnectDB()
+	if err != nil{
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
 	harService := services.NewHARService()
 	harHandler := handlers.NewHARHandler(harService)
 	router := gin.Default()
@@ -28,7 +33,7 @@ func main() {
 
 	// Register the upload route
 	//router.POST("/upload", harHandler.UploadHAR)
-	db.ConnectDB()
+	
 	log.Println("Server running on :8080")
 	router.Run(":8080")
 }

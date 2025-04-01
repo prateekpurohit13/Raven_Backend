@@ -4,6 +4,8 @@ import(
 	"fmt"
 	"log"
 	"github.com/RavenSec10/Raven_Backend/har_parser"
+	"github.com/RavenSec10/Raven_Backend/db"
+
 )
 
 // HARService struct
@@ -21,23 +23,58 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 
     apiInfoList := har_parser.ExtractAPIInfo(harData) // Call ExtractAPIInfo
 
-    // Now, do something with the extracted API info (e.g., print it, store it):
-    for _, apiInfo := range apiInfoList {
-		method, ok := apiInfo["method"].(string)
+    // Process the extracted API info and save to MongoDB
+	for _, apiInfo := range apiInfoList {
+		methodValue, ok := apiInfo["request_method"]
 		if !ok {
-			log.Println("Error: 'method' is not a string")
+			log.Println("Error: 'request_method' is missing")
 			continue
 		}
 
-		url, ok := apiInfo["url"].(string)
+		method, ok := methodValue.(string)
 		if !ok {
-			log.Println("Error: 'url' is not a string")
+			log.Println("Error: 'request_method' is not a string")
 			continue
 		}
-        fmt.Println("Method:", method)
-        fmt.Println("URL:", url)
-        
-    }
+		
+		apiEndpointValue, ok := apiInfo["request_url"]
+		if !ok {
+			log.Println("Error: 'request_url' is missing")
+			continue
+		}
 
-    return nil
+		apiEndpoint, ok := apiEndpointValue.(string)
+		if !ok {
+			log.Println("Error: 'request_url' is not a string")
+			continue
+		}
+
+		headersValue, ok := apiInfo["request_headers"]
+		if !ok {
+			log.Println("Error: 'request_headers' is missing")
+			continue
+		}
+
+		headers, ok := headersValue.(map[string]string)
+		if !ok {
+			log.Println("Error: 'request_headers' is not a map[string]string")
+			continue
+		}
+		// Create a UserAPIData struct
+		apiData := db.UserAPIData{
+			APIEndpoint: apiEndpoint,
+			Method:      method,
+			Headers:        headers,
+			Source:      "HAR File", // Set the source
+		}
+
+		// Save the API data to MongoDB
+		err = db.SaveUserAPIData(apiData)
+		if err != nil {
+			log.Printf("Failed to save API data to MongoDB: %v\n", err)
+			// Consider whether to continue processing other API entries
+		}
+	}
+
+	return nil
 }
