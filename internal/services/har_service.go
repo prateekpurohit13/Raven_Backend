@@ -60,11 +60,37 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 			log.Println("Error: 'request_headers' is not a map[string]string")
 			continue
 		}
+
+		requestBodyValue, ok := apiInfo["request_body"]
+		if !ok {
+			log.Println("Error: 'request_body' is missing")
+			continue
+		}
+
+		requestBody, ok := requestBodyValue.(string)
+		if !ok {
+			log.Println("Error: 'request_body' is not a string")
+			continue
+		}
+
+		responseBodyValue, ok := apiInfo["response_body"]
+		if !ok {
+			log.Println("Error: 'response_body' is missing")
+			continue
+		}
+
+		responseBody, ok := responseBodyValue.(string)
+		if !ok {
+			log.Println("Error: 'response_body' is not a string")
+			continue
+		}
 		// Create a UserAPIData struct
 		apiData := db.UserAPIData{
 			APIEndpoint: apiEndpoint,
 			Method:      method,
 			Headers:        headers,
+			RequestBody:     map[string]interface{}{"body": requestBody}, // Assign request body,
+			ResponseBody:     map[string]interface{}{"body": responseBody}, // Assign response body,
 			Source:      "HAR File", // Set the source
 		}
 

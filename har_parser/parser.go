@@ -19,7 +19,10 @@ type HAREntry struct {
 		Method  string      `json:"method"`
 		URL     string      `json:"url"`
 		Headers []HARHeader `json:"headers"`
-		// Body  string      `json:"body"`  // Add if you need request body
+		PostData  struct {  // Added PostData struct
+			MimeType string `json:"mimeType"`
+			Text     string `json:"text"`
+		} `json:"postData"`
 	} `json:"request"`
 	Response struct {
 		Status      int         `json:"status"`
@@ -27,7 +30,9 @@ type HAREntry struct {
 		Headers     []HARHeader `json:"headers"`
 		Content struct{
 			Size int64 `json:"size"`
-		} `json:"content"`// Add if you need response body
+			MimeType string `json:"mimeType"`
+			Text     string `json:"text"` // Add body to response struct
+		} `json:"content"`
 		BodySize int64 `json:"bodySize"`
 	} `json:"response"`
 	Time    float64 `json:"time"`
@@ -87,8 +92,10 @@ func ExtractAPIInfo(har *HAR) []map[string]interface{} {
 			"request_method":  entry.Request.Method,
 			"request_url":     entry.Request.URL,
 			"request_headers": simplifyHeaders(entry.Request.Headers),
+			"request_body":    entry.Request.PostData.Text,  // Added request body
 			"response_status": entry.Response.Status,
 			"response_headers": simplifyHeaders(entry.Response.Headers),
+			"response_body":   entry.Response.Content.Text,  // Added response body
 			"response_body_size": entry.Response.BodySize,
 			"timestamp":       entry.StartedDateTime,
 			"time":            entry.Time,  // Request processing time
