@@ -37,6 +37,8 @@ type HAREntry struct {
 	} `json:"response"`
 	Time    float64 `json:"time"`
 	StartedDateTime string `json:"startedDateTime"` // add if you need timestamp of the request
+	RequestBody map[string]interface{} `json:"request_body"`
+ 	ResponseBody map[string]interface{} `json:"response_body"`
 }
 
 type HARHeader struct {
@@ -92,17 +94,25 @@ func ExtractAPIInfo(har *HAR) []map[string]interface{} {
 			"request_method":  entry.Request.Method,
 			"request_url":     entry.Request.URL,
 			"request_headers": simplifyHeaders(entry.Request.Headers),
-			"request_body":    entry.Request.PostData.Text,  // Added request body
 			"response_status": entry.Response.Status,
 			"response_headers": simplifyHeaders(entry.Response.Headers),
-			"response_body":   entry.Response.Content.Text,  // Added response body
 			"response_body_size": entry.Response.BodySize,
 			"timestamp":       entry.StartedDateTime,
 			"time":            entry.Time,  // Request processing time
-			// Add more fields as needed
+			"request_body":    getRequestBody(&entry),  // Added request body
+			"response_body":   getResponseBody(&entry),  // Added response body
 		}
 		apiInventory = append(apiInventory, apiInfo)
 	}
 
 	return apiInventory
+}
+// Helper function to get the request body as a string
+func getRequestBody(entry *HAREntry) string {
+		return entry.Request.PostData.Text
+}
+
+// Helper function to get the response body as a string
+func getResponseBody(entry *HAREntry) string {
+		return entry.Response.Content.Text
 }

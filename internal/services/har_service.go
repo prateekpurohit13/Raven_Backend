@@ -16,14 +16,14 @@ func NewHARService() *HARService {
 }
 
 func (s *HARService) ProcessAndStore(filePath string) error {
-    harData, err := har_parser.ParseHAR(filePath)
-    if err != nil {
-        return fmt.Errorf("failed to parse HAR file: %w", err)
-    }
+	harData, err := har_parser.ParseHAR(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to parse HAR file: %w", err)
+	}
 
-    apiInfoList := har_parser.ExtractAPIInfo(harData) // Call ExtractAPIInfo
+	apiInfoList := har_parser.ExtractAPIInfo(harData)
 
-    // Process the extracted API info and save to MongoDB
+	// Process the extracted API info and save to MongoDB
 	for _, apiInfo := range apiInfoList {
 		methodValue, ok := apiInfo["request_method"]
 		if !ok {
@@ -64,26 +64,23 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 		requestBodyValue, ok := apiInfo["request_body"]
 		if !ok {
 			log.Println("Error: 'request_body' is missing")
-			continue
+		}
+		requestBody := ""
+		if ok {
+			requestBody = requestBodyValue.(string)
 		}
 
-		requestBody, ok := requestBodyValue.(string)
-		if !ok {
-			log.Println("Error: 'request_body' is not a string")
-			continue
-		}
 
 		responseBodyValue, ok := apiInfo["response_body"]
 		if !ok {
 			log.Println("Error: 'response_body' is missing")
-			continue
 		}
 
-		responseBody, ok := responseBodyValue.(string)
-		if !ok {
-			log.Println("Error: 'response_body' is not a string")
-			continue
+		responseBody := ""
+		if ok {
+			responseBody = responseBodyValue.(string)
 		}
+
 		// Create a UserAPIData struct
 		apiData := db.UserAPIData{
 			APIEndpoint: apiEndpoint,
@@ -98,7 +95,6 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 		err = db.SaveUserAPIData(apiData)
 		if err != nil {
 			log.Printf("Failed to save API data to MongoDB: %v\n", err)
-			// Consider whether to continue processing other API entries
 		}
 	}
 
