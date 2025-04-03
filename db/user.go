@@ -1,4 +1,3 @@
-// db/user.go
 package db
 
 import (
@@ -10,42 +9,45 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// UserAPIData represents the extracted API metadata
 type UserAPIData struct {
-	ID              primitive.ObjectID         `bson:"_id,omitempty"`   // Unique MongoDB ObjectID
-	APIEndpoint     string                   `bson:"api_endpoint"`   // API URL path
-	Method          string                   `bson:"method"`        // HTTP method (GET, POST, etc.)
-	Headers         map[string]string          `bson:"headers"`       // Request headers
-	RequestBody     map[string]interface{}     `bson:"request_body"`  // Data sent in request
-	ResponseBody    map[string]interface{}    `bson:"response_body"` // Data received in response
-	SensitiveFields []string                 `bson:"sensitive_fields"` // Detected SPII fields
-	Timestamp       time.Time                `bson:"timestamp"`     // Time of data extraction
-	Source          string                   `bson:"source"`        // HAR file reference
+	ID              primitive.ObjectID `bson:"_id,omitempty"`
+	APIEndpoint     string             `bson:"api_endpoint"`
+	Method          string             `bson:"method"`
+	Headers         map[string]string  `bson:"headers"`
+	RequestBody     string             `bson:"request_body,omitempty"`
+	ResponseBody    string             `bson:"response_body,omitempty"`
+	SensitiveFields []string           `bson:"sensitive_fields,omitempty"`
+	Timestamp       time.Time          `bson:"timestamp"`
+	Source          string             `bson:"source"`               
 }
 
-// SaveUserAPIData inserts API metadata into MongoDB
-func SaveUserAPIData(data UserAPIData) error {
-	collection := GetCollection("user_api_data") // Collection name
 
-	data.Timestamp = time.Now() // Assign current timestamp
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // Timeout context
+func SaveUserAPIData(data UserAPIData) error {
+	collection := GetCollection("user_api_data")
+	if data.Timestamp.IsZero() {
+		log.Println("Warning: UserAPIData timestamp is zero, setting to current time.")
+		data.Timestamp = time.Now()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	_, err := collection.InsertOne(ctx, data)
 	if err != nil {
+		log.Printf("Failed to insert API data for endpoint %s (%s): %v\n", data.APIEndpoint, data.Method, err)
 		return fmt.Errorf("failed to insert API data: %w", err)
 	}
-	log.Println("API Data Inserted Successfully!")
+
+	log.Printf("API Data Inserted Successfully for %s (%s)", data.APIEndpoint, data.Method)
 	return nil
 }
 
-// FindAllAPIData retrieves all API data from MongoDB (example)
 func FindAllAPIData() ([]UserAPIData, error) {
 	collection := GetCollection("user_api_data")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cursor, err := collection.Find(ctx, primitive.D{}) // Empty filter to get all documents
+	cursor, err := collection.Find(ctx, primitive.D{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to find API data: %w", err)
 	}

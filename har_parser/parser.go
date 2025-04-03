@@ -1,52 +1,159 @@
 package har_parser
 
 import (
+	"encoding/base64" 
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"strings" 
+	"time"    
 )
 
-// HAR struct (more complete)
 type HAR struct {
-	Log struct {
-		Entries []HAREntry `json:"entries"`
-	} `json:"log"`
+	Log Log `json:"log"`
+}
+
+type Log struct {
+	Version string     `json:"version"`
+	Creator Creator    `json:"creator"`
+	Pages   []Page     `json:"pages,omitempty"`
+	Entries []HAREntry `json:"entries"`
+}
+
+type Creator struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Comment string `json:"comment,omitempty"` 
+}
+
+type Page struct {
+	StartedDateTime time.Time   `json:"startedDateTime"` 
+	ID              string      `json:"id"`
+	Title           string      `json:"title"`
+	PageTimings     PageTimings `json:"pageTimings"`
+	Comment         string      `json:"comment,omitempty"` 
+}
+
+type PageTimings struct {
+	OnContentLoad float64 `json:"onContentLoad,omitempty"` // Use float64, handle -1/omitempty
+	OnLoad        float64 `json:"onLoad,omitempty"`        // Use float64, handle -1/omitempty
+	Comment       string  `json:"comment,omitempty"`       
 }
 
 type HAREntry struct {
-	Request struct {
-		Method  string      `json:"method"`
-		URL     string      `json:"url"`
-		Headers []HARHeader `json:"headers"`
-		PostData  struct {  // Added PostData struct
-			MimeType string `json:"mimeType"`
-			Text     string `json:"text"`
-		} `json:"postData"`
-	} `json:"request"`
-	Response struct {
-		Status      int         `json:"status"`
-		StatusText  string      `json:"statusText"`
-		Headers     []HARHeader `json:"headers"`
-		Content struct{
-			Size int64 `json:"size"`
-			MimeType string `json:"mimeType"`
-			Text     string `json:"text"` // Add body to response struct
-		} `json:"content"`
-		BodySize int64 `json:"bodySize"`
-	} `json:"response"`
-	Time    float64 `json:"time"`
-	StartedDateTime string `json:"startedDateTime"` // add if you need timestamp of the request
-	RequestBody map[string]interface{} `json:"request_body"`
- 	ResponseBody map[string]interface{} `json:"response_body"`
+	Pageref         string    `json:"pageref,omitempty"` 
+	StartedDateTime time.Time `json:"startedDateTime"`   // Use time.Time
+	Time            float64   `json:"time"`              // Request time in ms
+	Request         Request   `json:"request"`
+	Response        Response  `json:"response"`
+	Cache           Cache     `json:"cache"`             // Cache details
+	Timings         Timings   `json:"timings"`           // Detailed timings
+	ServerIPAddress string    `json:"serverIPAddress,omitempty"`
+	Connection      string    `json:"connection,omitempty"`
+	Comment         string    `json:"comment,omitempty"` 
+}
+
+type Request struct {
+	Method      string        `json:"method"`
+	URL         string        `json:"url"` // Keep original URL here
+	HTTPVersion string        `json:"httpVersion"`
+	Cookies     []Cookie      `json:"cookies"`
+	Headers     []HARHeader   `json:"headers"`
+	QueryString []QueryString `json:"queryString"`
+	PostData    *PostData `json:"postData,omitempty"`
+	HeadersSize int64     `json:"headersSize"` // Use int64, handle -1
+	BodySize    int64     `json:"bodySize"`    // Use int64, handle -1
+	Comment     string    `json:"comment,omitempty"`
+}
+
+type Response struct {
+	Status      int         `json:"status"`
+	StatusText  string      `json:"statusText"`
+	HTTPVersion string      `json:"httpVersion"`
+	Cookies     []Cookie    `json:"cookies"`
+	Headers     []HARHeader `json:"headers"`
+	Content     *RespContent `json:"content"`
+	RedirectURL string       `json:"redirectURL"`
+	HeadersSize int64        `json:"headersSize"` // Use int64, handle -1
+	BodySize    int64        `json:"bodySize"`    // Use int64, handle -1 (size before decompression)
+	Comment     string       `json:"comment,omitempty"`
+}
+
+// Added PostData struct (as used in Request)
+type PostData struct {
+	MimeType string `json:"mimeType"`
+	Text     string `json:"text,omitempty"`    // Body content
+	Params   []Param `json:"params,omitempty"` 
+	Comment  string `json:"comment,omitempty"` 
+}
+
+// Added RespContent struct (as used in Response)
+type RespContent struct {
+	Size     int64  `json:"size"` // Size of the response body (decompressed)
+	MimeType string `json:"mimeType"`
+	Text     string `json:"text,omitempty"`    // Body content (may be base64 encoded)
+	Encoding string `json:"encoding,omitempty"` 
+	Comment  string `json:"comment,omitempty"`  
 }
 
 type HARHeader struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name    string `json:"name"`
+	Value   string `json:"value"`
+	Comment string `json:"comment,omitempty"`
 }
 
-// ParseHAR reads and parses a HAR file
+type Cookie struct {
+	Name     string     `json:"name"`
+	Value    string     `json:"value"`
+	Path     string     `json:"path,omitempty"`
+	Domain   string     `json:"domain,omitempty"`
+	Expires  *time.Time `json:"expires,omitempty"` 
+	HTTPOnly bool       `json:"httpOnly,omitempty"`
+	Secure   bool       `json:"secure,omitempty"`
+	Comment  string     `json:"comment,omitempty"`
+}
+
+type QueryString struct {
+	Name    string `json:"name"`
+	Value   string `json:"value"`
+	Comment string `json:"comment,omitempty"` 
+}
+
+type Param struct {
+	Name        string `json:"name"`
+	Value       string `json:"value,omitempty"`
+	FileName    string `json:"fileName,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	Comment     string `json:"comment,omitempty"` 
+}
+
+type Cache struct { 
+	BeforeRequest *CacheEntry `json:"beforeRequest,omitempty"`
+	AfterRequest  *CacheEntry `json:"afterRequest,omitempty"`
+	Comment       string      `json:"comment,omitempty"` 
+}
+type CacheEntry struct {
+	Expires    *time.Time `json:"expires,omitempty"`
+	LastAccess time.Time  `json:"lastAccess"`
+	ETag       string     `json:"eTag"`
+	HitCount   int        `json:"hitCount"`
+	Comment    string     `json:"comment,omitempty"` 
+}
+
+type Timings struct { 
+	Blocked float64 `json:"blocked,omitempty"` // Use float64, handle -1/omitempty
+	DNS     float64 `json:"dns,omitempty"`     // Use float64, handle -1/omitempty
+	Connect float64 `json:"connect,omitempty"` // Use float64, handle -1/omitempty
+	Send    float64 `json:"send"`              // Use float64
+	Wait    float64 `json:"wait"`              // Use float64
+	Receive float64 `json:"receive"`           // Use float64
+	SSL     float64 `json:"ssl,omitempty"`     // Use float64, handle -1/omitempty
+	Comment string  `json:"comment,omitempty"` 
+}
+
+// Parsing and Extraction Logic
+
 func ParseHAR(filePath string) (*HAR, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -59,60 +166,97 @@ func ParseHAR(filePath string) (*HAR, error) {
 		return nil, fmt.Errorf("error unmarshaling HAR data: %w", err)
 	}
 
-	// Post-processing: Extract request path
-	for i := range har.Log.Entries {
-		har.Log.Entries[i].Request.URL = extractPathFromURL(har.Log.Entries[i].Request.URL)
-	}
-
 	return &har, nil
 }
 
-// extractPathFromURL extracts the path from a URL string.
 func extractPathFromURL(urlString string) string {
 	u, err := url.Parse(urlString)
 	if err != nil {
-		return "" // Return empty string if parsing fails
+		fmt.Printf("Warning: Failed to parse URL '%s': %v\n", urlString, err)
+		return urlString // Return original URL on parse error
 	}
-	return u.Path
+
+	return u.RequestURI() // Returns path + query string
 }
 
-// simplifyHeaders extracts and simplifies header information.
 func simplifyHeaders(headers []HARHeader) map[string]string {
 	simplified := make(map[string]string)
 	for _, header := range headers {
-		simplified[header.Name] = header.Value
+		simplified[strings.ToLower(header.Name)] = header.Value // Store keys lowercased for consistency
 	}
 	return simplified
 }
 
-// ExtractAPIInventory extracts relevant API inventory data from a HAR file.
-func ExtractAPIInfo(har *HAR) []map[string]interface{} {
-	apiInventory := []map[string]interface{}{}
+type ExtractedInfo struct {
+	Method          string            `json:"request_method"`
+	URL             string            `json:"request_url"` // Full original URL
+	APIEndpoint     string            `json:"api_endpoint"` // Just the path/query part
+	RequestHeaders  map[string]string `json:"request_headers"`
+	RequestBody     string            `json:"request_body"` // Body as string
+	ResponseStatus  int               `json:"response_status"`
+	ResponseHeaders map[string]string `json:"response_headers"`
+	ResponseBody    string            `json:"response_body"` // Body as string
+	ResponseBodySize int64             `json:"response_body_size"` // Size from response.content.size
+	StartedDateTime time.Time         `json:"timestamp"`
+	Time            float64           `json:"time"` // Request processing time
+}
+
+func ExtractAPIInfo(har *HAR) []ExtractedInfo {
+	apiInventory := []ExtractedInfo{}
 
 	for _, entry := range har.Log.Entries {
-		apiInfo := map[string]interface{}{
-			"request_method":  entry.Request.Method,
-			"request_url":     entry.Request.URL,
-			"request_headers": simplifyHeaders(entry.Request.Headers),
-			"response_status": entry.Response.Status,
-			"response_headers": simplifyHeaders(entry.Response.Headers),
-			"response_body_size": entry.Response.BodySize,
-			"timestamp":       entry.StartedDateTime,
-			"time":            entry.Time,  // Request processing time
-			"request_body":    getRequestBody(&entry),  // Added request body
-			"response_body":   getResponseBody(&entry),  // Added response body
+		apiInfo := ExtractedInfo{
+			Method:          entry.Request.Method,
+			URL:             entry.Request.URL,                       // Store original URL
+			APIEndpoint:     extractPathFromURL(entry.Request.URL), // Extract path/query
+			RequestHeaders:  simplifyHeaders(entry.Request.Headers),
+			RequestBody:     getRequestBody(&entry), // Safely get request body
+			ResponseStatus:  entry.Response.Status,
+			ResponseHeaders: simplifyHeaders(entry.Response.Headers),
+			ResponseBody:    getResponseBody(&entry), // Safely get response body
+			ResponseBodySize: getResponseBodySize(&entry),
+			StartedDateTime:  entry.StartedDateTime,
+			Time:             entry.Time,
 		}
 		apiInventory = append(apiInventory, apiInfo)
 	}
 
 	return apiInventory
 }
-// Helper function to get the request body as a string
+
 func getRequestBody(entry *HAREntry) string {
-		return entry.Request.PostData.Text
+	if entry.Request.PostData == nil {
+		return "" // No PostData present
+	}
+	return entry.Request.PostData.Text
 }
 
-// Helper function to get the response body as a string
 func getResponseBody(entry *HAREntry) string {
-		return entry.Response.Content.Text
+	if entry.Response.Content == nil {
+		return "" // No Content present
+	}
+
+	bodyText := entry.Response.Content.Text
+
+	// Handle base64 encoding if specified
+	if entry.Response.Content.Encoding == "base64" {
+		decodedBody, err := base64.StdEncoding.DecodeString(bodyText)
+		if err == nil {
+			return string(decodedBody)
+		} else {
+			fmt.Printf("Warning: Failed to decode base64 response body for URL %s: %v\n", entry.Request.URL, err)
+
+			return bodyText
+		}
+	}
+
+	return bodyText 
+}
+
+func getResponseBodySize(entry *HAREntry) int64 {
+    if entry.Response.Content != nil {
+        return entry.Response.Content.Size
+    }
+	
+    return entry.Response.BodySize
 }
