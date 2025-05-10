@@ -22,9 +22,10 @@ func main() {
 
 	harService := services.NewHARService()
 	harHandler := handlers.NewHARHandler(harService)
+	harAPIHandler := handlers.NewHarAPIHandler()
 	router := gin.Default()
 
-	routes.SetupRoutes(router, harHandler)
+	routes.SetupRoutes(router, harHandler, harAPIHandler)
 
 	// Add a root route for testing
 	//router.GET("/", func(c *gin.Context) {
