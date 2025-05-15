@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/cors"
 	"github.com/RavenSec10/Raven_Backend/internal/handlers"
 )
 
@@ -11,5 +12,6 @@ func SetupRoutes(router *gin.Engine, harHandler *handlers.HARHandler, harAPIHand
 		c.JSON(200, gin.H{"message": "Welcome to RAVEN API"})
 	})
 	router.POST("/upload-har", harHandler.UploadHAR) // call the function from upload.go
+	router.Use(cors.Default())
 	harAPIHandler.SetupHarRoutes(router)
 }
