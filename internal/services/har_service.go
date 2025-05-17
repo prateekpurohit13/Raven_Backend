@@ -52,6 +52,7 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 			ResponseBody: responseBody,
 			Source:       "HAR File", 
 			Timestamp:    info.StartedDateTime,
+			Url:          info.URL,
 		}
 
 		

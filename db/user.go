@@ -18,7 +18,8 @@ type UserAPIData struct {
 	ResponseBody    string             `bson:"response_body,omitempty"`
 	SensitiveFields []string           `bson:"sensitive_fields,omitempty"`
 	Timestamp       time.Time          `bson:"timestamp"`
-	Source          string             `bson:"source"`               
+	Source          string             `bson:"source"`
+	Url             string             `bson:"url"`               
 }
 
 
