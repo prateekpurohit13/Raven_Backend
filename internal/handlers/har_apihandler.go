@@ -25,6 +25,7 @@ type UserAPIData struct {
 	SensitiveFields []string           `bson:"sensitive_fields,omitempty" json:"sensitive_fields"`
 	Timestamp       time.Time          `bson:"timestamp" json:"timestamp"`
 	Source          string             `bson:"source" json:"source"`
+	Url             string             `bson:"url" json:"url"`
 }
 
 type PaginatedResponse struct {
