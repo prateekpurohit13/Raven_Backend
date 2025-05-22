@@ -14,9 +14,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Define the UserAPIData struct (copied from db/user.go)
+// Define the UserAPIData struct
 type UserAPIData struct {
-	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"` //Add json tag for id
+	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	APIEndpoint     string             `bson:"api_endpoint" json:"api_endpoint"`
 	Method          string             `bson:"method" json:"method"`
 	Headers         map[string]string  `bson:"headers" json:"headers"`
@@ -33,9 +33,8 @@ type PaginatedResponse struct {
 	Total int64         `json:"total"`
 }
 
-// getHarEntries retrieves all UserAPIData entries from MongoDB
 func getHarEntries(c *gin.Context) {
-	// Pagination parameters
+	
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "10")
 	searchQuery := c.Query("query")
@@ -60,7 +59,6 @@ func getHarEntries(c *gin.Context) {
 		filter["api_endpoint"] = bson.M{"$regex": primitive.Regex{Pattern: searchQuery, Options: "i"}}
 	}
 
-	// Count total items
 	collection := db.GetCollection("user_api_data")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -72,10 +70,8 @@ func getHarEntries(c *gin.Context) {
 		return
 	}
 
-	// Pagination options
 	findOptions := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit))
 
-	// Retrieve paginated items
 	cursor, err := collection.Find(ctx, filter, findOptions)
 	if err != nil {
 		log.Printf("Failed to find API data: %v", err)
@@ -91,7 +87,6 @@ func getHarEntries(c *gin.Context) {
 		return
 	}
 
-	// Construct paginated response
 	response := PaginatedResponse{
 		Items: apiData,
 		Total: total,
@@ -100,32 +95,24 @@ func getHarEntries(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// getHarEntry retrieves a single UserAPIData entry by ID from MongoDB
 func getHarEntry(c *gin.Context) {
-	idStr := c.Param("id") // Get the ID from the URL path
+	idStr := c.Param("id")
 	if idStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID parameter is required"})
 		return
 	}
 
-	// Convert the ID string to a MongoDB ObjectID
 	objectID, err := primitive.ObjectIDFromHex(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
 
-	// Prepare the filter to find the document by ID
 	filter := bson.M{"_id": objectID}
-
-	// Get the collection from the database
 	collection := db.GetCollection("user_api_data")
-
-	// Context for the database operation
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Find the document
 	var apiData UserAPIData
 	err = collection.FindOne(ctx, filter).Decode(&apiData)
 	if err != nil {
@@ -133,14 +120,11 @@ func getHarEntry(c *gin.Context) {
 		return
 	}
 
-	// Return the API data in the response
 	c.JSON(http.StatusOK, gin.H{"items": []UserAPIData{apiData}, "total": 1})
 }
 
-//HARHandler struct to inject har api calls
 type HarAPIHandler struct{}
 
-//SetupHarRoutes to inject har api calls
 func (h *HarAPIHandler) SetupHarRoutes(router *gin.Engine) {
 	router.GET("/api/har-entries", getHarEntries)
 	router.GET("/api/har-entries/:id", getHarEntry)
