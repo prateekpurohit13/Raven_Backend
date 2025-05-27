@@ -20,7 +20,10 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	harService := services.NewHARService()
+	harService, err := services.NewHARService()
+	if err != nil {
+		log.Fatalf("Failed to initialize HAR service: %v", err)
+	}
 	harHandler := handlers.NewHARHandler(harService)
 	harAPIHandler := handlers.NewHarAPIHandler()
 	router := gin.Default()
