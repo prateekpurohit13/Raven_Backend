@@ -37,8 +37,8 @@ type UserAPIData struct {
 	RequestBody     string             `bson:"request_body,omitempty"`
 	ResponseBody    string             `bson:"response_body,omitempty"`
 	SensitiveFields []string           `bson:"sensitive_fields,omitempty"`
-	RiskLevel      string `bson:"risk_level,omitempty"`
-	PIIFindings     []PIIFinding `bson:"pii_findings,omitempty"`
+	RiskLevel      string 			   `bson:"risk_level,omitempty"`
+	PIIFindings     []PIIFinding 	   `bson:"pii_findings,omitempty"`
 	Timestamp       time.Time          `bson:"timestamp"`
 	Source          string             `bson:"source"`
 	Url             string             `bson:"url"`

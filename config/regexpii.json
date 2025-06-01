@@ -3,196 +3,196 @@
     "field_based": {
       "description": "Field name + value pattern matching (your approach)",
       "patterns": {
-        "pan_card": {
+        "PAN_CARD": {
           "fieldNames": ["pan", "pancard", "pancardnumber", "pannumber", "panno"],
           "valuePattern": "[A-Z]{5}[0-9]{4}[A-Z]{1}",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["PII", "FINANCE"]
         },
-        "visa_card": {
+        "VISA_CARD": {
           "fieldNames": ["cardnumber", "ccnumber", "creditcard", "card", "cc", "visa", "visacard"],
           "valuePattern": "\\b4[0-9]{12}(?:[0-9]{3})?\\b",
           "riskLevel": "CRITICAL",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "mastercard": {
+        "MASTERCARD": {
           "fieldNames": ["cardnumber", "ccnumber", "creditcard", "card", "cc", "mastercard"],
           "valuePattern": "\\b(5[1-5][0-9]{14}|2(22[1-9][0-9]{12}|2[3-9][0-9]{13}|[3-6][0-9]{14}|7[0-1][0-9]{13}|720[0-9]{12}))\\b",
           "riskLevel": "CRITICAL",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "maestro_card": {
+        "MAESTRO_CARD": {
           "fieldNames": ["cardnumber", "ccnumber", "creditcard", "card", "cc", "maestro"],
           "valuePattern": "\\b(5018|5020|5038|6304|6759|6761|6763)[0-9]{8,15}\\b",
           "riskLevel": "CRITICAL",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "us_ssn": {
+        "US_SSN": {
           "fieldNames": ["ssn", "socialsecurity", "socialsecuritynumber", "sin"],
           "valuePattern": "\\b([\\dlZEASBO]{3} [\\dlZEASBO]{2} [\\dlZEASBO]{4}|([\\dlZEASBO] ?){3}[—\\-_] ?([\\dlZEASBO] ?){2}[—\\-_] ?([\\dlZEASBO] ?){4})\\b",
           "riskLevel": "CRITICAL",
           "category": "PII",
           "tags": ["PII"]
         },
-        "canadian_sin": {
+        "CANADIAN_SIN": {
           "fieldNames": ["sin", "socialsecurity", "socialsecuritynumber", "socialinsurance", "socialinsurancenumber"],
           "valuePattern": "^[0-9]{9}$",
           "riskLevel": "HIGH",
           "category": "PII",
           "tags": ["PII"]
         },
-        "uk_nino": {
+        "UK_NINO": {
           "fieldNames": ["nino", "nationalinsurance", "nationalinsurancenumber", "ni"],
           "valuePattern": "(?!BG)(?!GB)(?!NK)(?!KN)(?!NT)(?!TN)(?!ZZ)(?! ?.O)[A-CE-EG-HJ-PR-TW-Za-ce-eg-hj-pr-tw-z]{2}[0-9]{6}[A-Da-d]{1}",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "finnish_pin": {
+        "FINNISH_PIN": {
           "fieldNames": ["pin", "personalidentity", "personalidentitynumber", "henkilotunnus"],
           "valuePattern": "([0-2][0-9]|[3-3][0-1])([0-0][1-9]|[1-1][0-2])[0-9]{2}[Aa\\+\\-]{1}([0-8][0-9][2-8]|[1-8][0-9][0-9])[0-9A-Ya-y]",
           "riskLevel": "HIGH",
           "category": "PII",
           "tags": ["PII"]
         },
-        "german_insurance_id": {
+        "GERMAN_INSURANCE_ID": {
           "fieldNames": ["insuranceid", "versicherungsnummer", "insurance", "insurancenumber"],
           "valuePattern": "[0-9]{2}([0-2][0-9]|[3-3][0-1])([0-0][1-9]|[1-1][0-2])[0-9]{2}[A-Za-z][0-9]{3}",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "japanese_sin": {
+        "JAPANESE_SIN": {
           "fieldNames": ["mynumber", "socialinsurance", "socialinsurancenumber", "kojinbango"],
           "valuePattern": "^[0-9]{12}$",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "indian_health_id": {
+        "INDIAN_HEALTH_ID": {
           "fieldNames": ["healthid", "uhid", "uniquehealthid", "abhacard", "abhaid"],
           "valuePattern": "^[0-9]{14}$",
           "riskLevel": "HIGH",
           "category": "HEALTHCARE",
           "tags": ["HEALTHCARE", "PII"]
         },
-        "us_medicare": {
+        "US_MEDICARE": {
           "fieldNames": ["medicare", "medicarenumber", "medicarecard", "hicn"],
           "valuePattern": "[0-9]{9}[A-Za-z]{1}[0-9a-zA-Z]?",
           "riskLevel": "HIGH",
           "category": "HEALTHCARE",
           "tags": ["PII", "HEALTHCARE"]
         },
-        "iban": {
+        "IBAN": {
           "fieldNames": ["iban", "bankaccount", "bankaccountnumber", "account", "accountnumber"],
           "valuePattern": "[A-Z]{2}?[ ]?[0-9]{2}[ ]?\\s*(\\d{4}\\s*){4,10}(\\d{1,2}\\s*)?",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "swift_code": {
+        "SWIFT_CODE": {
           "fieldNames": ["swift", "swiftcode", "bic", "biccode", "bankcode"],
           "valuePattern": "\\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\\b",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "us_address": {
+        "US_ADDRESS": {
           "fieldNames": ["address", "homeaddress", "streetaddress", "mailingaddress", "billingaddress"],
           "valuePattern": "\\d{1,5}(\\s[\\w-.,]*){1,6},\\s[A-Z]{2}\\s\\d{5}\\b",
           "riskLevel": "MEDIUM",
           "category": "PII",
           "tags": ["PII"]
         },
-        "username": {
+        "USERNAME": {
           "fieldNames": ["username", "userid", "login", "user", "uname", "uid", "dbuser"],
           "valuePattern": "^[a-zA-Z0-9._-]{3,50}$",
           "riskLevel": "LOW",
           "category": "CREDENTIAL",
           "tags": ["CREDENTIAL"]
         },
-        "password": {
+        "PASSWORD": {
           "fieldNames": ["password", "passwd", "pwd", "pass", "secret"],
           "valuePattern": ".{6,}",
           "riskLevel": "CRITICAL",
           "category": "CREDENTIAL",
           "tags": ["CREDENTIAL"]
         },
-        "api_key": {
+        "API_KEY": {
           "fieldNames": ["apikey", "api_key", "accesskey", "access_key", "key", "token", "accesstoken", "sharedaccesskey"],
           "valuePattern": "^[a-zA-Z0-9]{6,}$",
           "riskLevel": "CRITICAL",
           "category": "CREDENTIAL",
           "tags": ["CREDENTIAL"]
         },
-        "credentials": {
+        "CREDENTIALS": {
           "fieldNames": ["credentials", "login", "certificate", "x509"],
           "valuePattern": ".+",
           "riskLevel": "CRITICAL",
           "category": "CREDENTIAL",
           "tags": ["CREDENTIAL"]
         },
-        "first_name": {
+        "FIRST_NAME": {
           "fieldNames": ["firstname", "fname", "givenname"],
           "valuePattern": "^[A-Za-z\\s]{2,50}$",
           "riskLevel": "LOW",
           "category": "PII",
           "tags": ["PII"]
         },
-        "last_name": {
+        "LAST_NAME": {
           "fieldNames": ["lastname", "lname", "surname", "familyname"],
           "valuePattern": "^[A-Za-z\\s]{2,50}$",
           "riskLevel": "LOW",
           "category": "PII",
           "tags": ["PII"]
         },
-        "full_name": {
+        "FULL_NAME": {
           "fieldNames": ["fullname", "name", "completename"],
           "valuePattern": "^[A-Za-z\\s]{3,100}$",
           "riskLevel": "LOW",
           "category": "PII",
           "tags": ["PII"]
         },
-        "drivers_license": {
+        "DRIVERS_LICENSE": {
           "fieldNames": ["driverslicense", "driverslicensenumber", "dl", "drivinglicense"],
           "valuePattern": "^[A-Za-z0-9]{6,20}$",
           "riskLevel": "HIGH",
           "category": "PII",
           "tags": ["PII"]
         },
-        "date_of_birth": {
+        "DATE_OF_BIRTH": {
           "fieldNames": ["dateofbirth", "dob", "birthdate", "birthday"],
           "valuePattern": "^(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}|\\d{4}[/-]\\d{1,2}[/-]\\d{1,2})$",
           "riskLevel": "MEDIUM",
           "category": "PII",
           "tags": ["PII"]
         },
-        "passport": {
+        "PASSPORT": {
           "fieldNames": ["passport", "passportnumber", "passportid"],
           "valuePattern": "^[A-Za-z0-9]{6,12}$",
           "riskLevel": "HIGH",
           "category": "PII",
           "tags": ["PII"]
         },
-        "national_id": {
+        "NATIONAL_ID": {
           "fieldNames": ["nationalid", "taxid", "passportid"],
           "valuePattern": "^[A-Za-z0-9]{6,20}$",
           "riskLevel": "HIGH",
           "category": "PII",
           "tags": ["PII"]
         },
-        "email": {
+        "EMAIL": {
           "fieldNames": ["email", "emailaddress", "mail", "e_mail"],
           "valuePattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
           "riskLevel": "MEDIUM",
           "category": "PII",
           "tags": ["PII"]
         },
-        "phone": {
+        "PHONE": {
           "fieldNames": ["phone", "phonenumber", "mobile", "contact", "tel", "telephone"],
           "valuePattern": "(\\+?[1-9]\\d{1,14}|\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4})",
           "riskLevel": "MEDIUM",
@@ -204,113 +204,113 @@
     "value_only": {
       "description": "Standalone value pattern matching (fallback for patterns without clear field name associations)",
       "patterns": {
-        "pan_card": {
+        "PAN_CARD": {
           "name": "PAN CARD",
           "regexPattern": "[A-Z]{5}[0-9]{4}[A-Z]{1}",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["PII", "FINANCE"]
         },
-        "us_medicare": {
+        "US_MEDICARE": {
           "name": "US Medicare Health Insurance Claim Number",
           "regexPattern": "[0-9]{9}[A-Za-z]{1}[0-9a-zA-Z]?",
           "riskLevel": "HIGH",
           "category": "HEALTHCARE",
           "tags": ["PII", "HEALTHCARE"]
         },
-        "indian_health_id": {
+        "INDIAN_HEALTH_ID": {
           "name": "Indian Unique Health Identification",
           "regexPattern": "^[0-9]{14}$",
           "riskLevel": "HIGH",
           "category": "HEALTHCARE",
           "tags": ["HEALTHCARE", "PII"]
         },
-        "uk_nino": {
+        "UK_NINO": {
           "name": "United Kingdom National Insurance Number",
           "regexPattern": "(?!BG)(?!GB)(?!NK)(?!KN)(?!NT)(?!TN)(?!ZZ)(?! ?.O)[A-CE-EG-HJ-PR-TW-Za-ce-eg-hj-pr-tw-z]{2}[0-9]{6}[A-Da-d]{1}",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "finnish_pin": {
+        "FINNISH_PIN": {
           "name": "Finnish Personal Identity Number",
           "regexPattern": "([0-2][0-9]|[3-3][0-1])([0-0][1-9]|[1-1][0-2])[0-9]{2}[Aa\\+\\-]{1}([0-8][0-9][2-8]|[1-8][0-9][0-9])[0-9A-Ya-y]",
           "riskLevel": "HIGH",
           "category": "PII",
           "tags": ["PII"]
         },
-        "canadian_sin": {
+        "CANADIAN_SIN": {
           "name": "Canadian Social Insurance Number",
           "regexPattern": "^[0-9]{9}$",
           "riskLevel": "HIGH",
           "category": "PII",
           "tags": ["PII"]
         },
-        "german_insurance": {
+        "GERMAN_INSURANCE": {
           "name": "German Insurance Identity Number",
           "regexPattern": "[0-9]{2}([0-2][0-9]|[3-3][0-1])([0-0][1-9]|[1-1][0-2])[0-9]{2}[A-Za-z][0-9]{3}",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "japanese_sin": {
+        "JAPANESE_SIN": {
           "name": "Japanese Social Insurance Number",
           "regexPattern": "^[0-9]{12}$",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "iban": {
+        "IBAN": {
           "name": "IBAN EUROPE",
           "regexPattern": "[A-Z]{2}?[ ]?[0-9]{2}[ ]?\\s*(\\d{4}\\s*){4,10}(\\d{1,2}\\s*)?",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "us_address": {
+        "US_ADDRESS": {
           "name": "US ADDRESS",
           "regexPattern": "\\d{1,5}(\\s[\\w-.,]*){1,6},\\s[A-Z]{2}\\s\\d{5}\\b",
           "riskLevel": "MEDIUM",
           "category": "PII",
           "tags": ["PII"]
         },
-        "mastercard": {
+        "MASTERCARD": {
           "name": "Mastercard",
           "regexPattern": "\\b(5[1-5][0-9]{14}|2(22[1-9][0-9]{12}|2[3-9][0-9]{13}|[3-6][0-9]{14}|7[0-1][0-9]{13}|720[0-9]{12}))\\b",
           "riskLevel": "CRITICAL",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "visa_card": {
+        "VISA_CARD": {
           "name": "Visa Card",
           "regexPattern": "\\b4[0-9]{12}(?:[0-9]{3})?\\b",
           "riskLevel": "CRITICAL",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "us_ssn": {
+        "US_SSN": {
           "name": "US SSN",
           "regexPattern": "\\b([\\dlZEASBO]{3} [\\dlZEASBO]{2} [\\dlZEASBO]{4}|([\\dlZEASBO] ?){3}[—\\-_] ?([\\dlZEASBO] ?){2}[—\\-_] ?([\\dlZEASBO] ?){4})\\b",
           "riskLevel": "CRITICAL",
           "category": "PII",
           "tags": ["PII"]
         },
-        "maestro_card": {
+        "MAESTRO_CARD": {
           "name": "Maestro Card",
           "regexPattern": "\\b(5018|5020|5038|6304|6759|6761|6763)[0-9]{8,15}\\b",
           "riskLevel": "CRITICAL",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-        "swift_codes": {
+        "SWIFT_CODES": {
           "name": "SWIFT Codes",
           "regexPattern": "\\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\\b",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
         },
-		"api_key": {
-		  "name": "APIKEY",
+		    "API_KEY": {
+		      "name": "APIKEY",
           "regexPattern": "\\^[a-zA-Z0-9]{6,}$\\b",
           "riskLevel": "CRITICAL", 
           "category": "CREDENTIAL",
@@ -321,7 +321,7 @@
     "keyword_based": {
       "description": "Field name pattern matching (from your original Normal PII Keyword and Credential Keyword patterns)",
       "patterns": {
-        "pii_keywords": {
+        "NORMAL_PII": {
           "name": "Normal PII Keyword",
           "regexPattern": "(?i)(^(((first|last|full)[_\\W]{0,2}name)|(social[_\\W]{0,2}security[_\\W]{0,2}number)|(^ssn)|(driver(s|'s)[_\\W]{0,2}license([_\\W]{0,2}number)?)|(date[_\\W]{0,2}of[_\\W]{0,2}birth)|(home[_\\W]{0,2}address)|(passport([_\\W]{0,2}number)?)|((passport|national|tax)[_\\W]{0,2}id))$)|(/((((first|last|full)[_\\W]{0,2}name)|(social[_\\W]{0,2}security[_\\W]{0,2}number)|(^ssn)|(driver(s|'s)[_\\W]{0,2}license([_\\W]{0,2}number)?)|(date[_\\W]{0,2}of[_\\W]{0,2}birth)|(home[_\\W]{0,2}address)|(passport([_\\W]{0,2}number)?)|((passport|national|tax)[_\\W]{0,2}id)))$)|(/((((first|last|full)[_\\W]{0,2}name)|(social[_\\W]{0,2}security[_\\W]{0,2}number)|(^ssn)|(driver(s|'s)[_\\W]{0,2}license([_\\W]{0,2}number)?)|(date[_\\W]{0,2}of[_\\W]{0,2}birth)|(home[_\\W]{0,2}address)|(passport([_\\W]{0,2}number)?)|((passport|national|tax)[_\\W]{0,2}id)))/)",
           "riskLevel": "LOW",
@@ -329,7 +329,7 @@
           "tags": ["PII"],
           "applyTo": "fieldName"
         },
-        "credential_keywords": {
+        "CREDENTIAL_KEYWORDS": {
           "name": "Credential Keyword",
           "regexPattern": "(?i)(^((user[_\\W]{0,2}(name|id))|((uid|password|secret|login|credentials|certificate|x509))|(db[_\\W]{0,2}user)|(((shared[_\\W]{0,2})?access|api)[_\\W]{0,2}key)|((access[_\\W]{0,2})?token))$)|(/((user[_\\W]{0,2}(name|id))|((uid|password|secret|login|credentials|certificate|x509))|(db[_\\W]{0,2}user)|(((shared[_\\W]{0,2})?access|api)[_\\W]{0,2}key)|((access[_\\W]{0,2})?token))$)|(/((user[_\\W]{0,2}(name|id))|((uid|password|secret|login|credentials|certificate|x509))|(db[_\\W]{0,2}user)|(((shared[_\\W]{0,2})?access|api)[_\\W]{0,2}key)|((access[_\\W]{0,2})?token))/)",
           "riskLevel": "CRITICAL",

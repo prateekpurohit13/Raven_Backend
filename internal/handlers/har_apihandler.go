@@ -14,6 +14,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+type PIIFinding struct {
+	PIIType       string    `bson:"pii_type"`
+	DetectedValue string    `bson:"detected_value"`
+	RiskLevel     string    `bson:"risk_level"`
+	Category      string    `bson:"category"`
+	Tags          []string  `bson:"tags"`
+}
 // Define the UserAPIData struct
 type UserAPIData struct {
 	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`
@@ -23,6 +30,8 @@ type UserAPIData struct {
 	RequestBody     string             `bson:"request_body,omitempty" json:"request_body"`
 	ResponseBody    string             `bson:"response_body,omitempty" json:"response_body"`
 	SensitiveFields []string           `bson:"sensitive_fields,omitempty" json:"sensitive_fields"`
+	RiskLevel      string 			   `bson:"risk_level,omitempty" json:"risk_level"`
+	PIIFindings     []PIIFinding       `bson:"pii_findings,omitempty" json:"pii_findings"`
 	Timestamp       time.Time          `bson:"timestamp" json:"timestamp"`
 	Source          string             `bson:"source" json:"source"`
 	Url             string             `bson:"url" json:"url"`
