@@ -34,7 +34,7 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 	extractedInfoList := har_parser.ExtractAPIInfo(harData)
 	log.Printf("Extracted %d entries from HAR file: %s", len(extractedInfoList), filePath)
 	var successCount, errorCount, piiFoundCount int
-	
+
 	for _, info := range extractedInfoList {
 		requestBody := info.RequestBody
 		if !utf8.ValidString(requestBody) {
@@ -48,20 +48,23 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 		}
 
 		apiData := db.UserAPIData{
-			APIEndpoint:  info.APIEndpoint,
-			Method:       info.Method,
-			Headers:      info.RequestHeaders,
-			RequestBody:  requestBody,
+			APIEndpoint: info.APIEndpoint,
+			Method:      info.Method,
+			Headers:     info.RequestHeaders,
+			RequestBody: requestBody,
 			ResponseBody: responseBody,
-			Source:       "HAR File",
-			Timestamp:    info.StartedDateTime,
-			Url:          info.URL,
+			Source:      "HAR File",
+			Timestamp:   info.StartedDateTime,
+			Url:         info.URL,
 		}
 
 		piiAnalysis := s.piiService.AnalyzePIIInAPIData(apiData)
 		var piiFindings []db.PIIFinding
+		var sensitiveFields []string
+		piiTypeMap := make(map[string]bool)
+
 		for _, finding := range piiAnalysis.Findings {
-			piiFindings = append(piiFindings, db.PIIFinding{
+			piiFinding := db.PIIFinding{
 				PIIType:       finding.PIIType,
 				DetectedValue: finding.DetectedValue,
 				FieldName:     finding.FieldName,
@@ -71,15 +74,22 @@ func (s *HARService) ProcessAndStore(filePath string) error {
 				Category:      finding.Category,
 				Tags:          finding.Tags,
 				Timestamp:     finding.Timestamp,
-			})
+				PIICount:        piiAnalysis.TotalCount,
+				RiskScore:       piiAnalysis.RiskScore,
+				HighestRisk:     piiAnalysis.HighestRisk,
+				HasPII:          piiAnalysis.TotalCount > 0,
+				LastPIIAnalysis: piiAnalysis.Timestamp,
+			}
+			piiFindings = append(piiFindings, piiFinding)
+
+			if _, ok := piiTypeMap[finding.PIIType]; !ok {
+				sensitiveFields = append(sensitiveFields, finding.PIIType)
+				piiTypeMap[finding.PIIType] = true
+			}
 		}
 		apiData.PIIFindings = piiFindings
-		apiData.PIICount = piiAnalysis.TotalCount
-		apiData.RiskScore = piiAnalysis.RiskScore
-		apiData.HighestRisk = piiAnalysis.HighestRisk
-		apiData.HasPII = piiAnalysis.TotalCount > 0
-		apiData.LastPIIAnalysis = piiAnalysis.Timestamp
-
+		apiData.SensitiveFields = sensitiveFields
+		apiData.RiskLevel = piiAnalysis.HighestRisk
 		err = db.SaveUserAPIData(apiData)
 		if err != nil {
 			log.Printf("Failed to save API data to MongoDB for entry (%s %s): %v\n", info.Method, info.APIEndpoint, err)
@@ -112,19 +122,28 @@ func (s *HARService) ProcessExistingDataForPII() error {
 		return fmt.Errorf("failed to fetch existing API data: %w", err)
 	}
 	var processedCount, piiFoundCount int
-	
+
 	for _, apiData := range apiDataList {
-		if !apiData.LastPIIAnalysis.IsZero() && 
-		   apiData.LastPIIAnalysis.After(apiData.LastPIIAnalysis.Add(-24*time.Hour)) {
+		needsAnalysis := true
+
+		for _, finding := range apiData.PIIFindings {
+			if !finding.LastPIIAnalysis.IsZero() &&
+				finding.LastPIIAnalysis.After(finding.LastPIIAnalysis.Add(-24*time.Hour)) {
+				needsAnalysis = false
+				break
+			}
+		}
+
+		if !needsAnalysis {
 			continue
 		}
 
-		piiAnalysis := s.piiService.AnalyzePIIInAPIData(apiData)		
+		piiAnalysis := s.piiService.AnalyzePIIInAPIData(apiData)
 		if piiAnalysis.TotalCount > 0 {
 			piiFoundCount++
 			var piiFindings []db.PIIFinding
 			for _, finding := range piiAnalysis.Findings {
-				piiFindings = append(piiFindings, db.PIIFinding{
+				piiFinding := db.PIIFinding{
 					PIIType:       finding.PIIType,
 					DetectedValue: finding.DetectedValue,
 					FieldName:     finding.FieldName,
@@ -134,7 +153,13 @@ func (s *HARService) ProcessExistingDataForPII() error {
 					Category:      finding.Category,
 					Tags:          finding.Tags,
 					Timestamp:     finding.Timestamp,
-				})
+					PIICount:        piiAnalysis.TotalCount,
+					RiskScore:       piiAnalysis.RiskScore,
+					HighestRisk:     piiAnalysis.HighestRisk,
+					HasPII:          piiAnalysis.TotalCount > 0,
+					LastPIIAnalysis: piiAnalysis.Timestamp,
+				}
+				piiFindings = append(piiFindings, piiFinding)
 			}
 			err := db.UpdateUserAPIDataWithPII(
 				apiData.APIEndpoint,
@@ -143,12 +168,12 @@ func (s *HARService) ProcessExistingDataForPII() error {
 				piiAnalysis.RiskScore,
 				piiAnalysis.HighestRisk,
 			)
-			
+
 			if err != nil {
 				log.Printf("Failed to update PII data for %s %s: %v", apiData.Method, apiData.APIEndpoint, err)
 			}
 		}
-		
+
 		processedCount++
 	}
 
@@ -166,22 +191,26 @@ func (s *HARService) GeneratePIIComplianceReport() (*db.PIIAnalysisReport, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get APIs with PII: %w", err)
 	}
+
 	var topRiskyEndpoints []db.RiskyEndpoint
 	for _, apiData := range apisWithPII {
-		if apiData.RiskScore > 5 {
-			topRiskyEndpoints = append(topRiskyEndpoints, db.RiskyEndpoint{
-				APIEndpoint: apiData.APIEndpoint,
-				Method:      apiData.Method,
-				RiskScore:   apiData.RiskScore,
-				PIICount:    apiData.PIICount,
-				HighestRisk: apiData.HighestRisk,
-			})
+		for _, finding := range apiData.PIIFindings {
+			if finding.RiskScore > 5 {
+				topRiskyEndpoints = append(topRiskyEndpoints, db.RiskyEndpoint{
+					APIEndpoint: apiData.APIEndpoint,
+					Method:      apiData.Method,
+					RiskScore:   finding.RiskScore,
+					PIICount:    finding.PIICount,
+					HighestRisk: finding.HighestRisk,
+				})
+				break
+			}
 		}
 	}
-
 	if len(topRiskyEndpoints) > 10 {
 		topRiskyEndpoints = topRiskyEndpoints[:10]
 	}
+
 	complianceStatus := "COMPLIANT"
 	if compliancePercentage, ok := stats["compliance_percentage"].(float64); ok {
 		if compliancePercentage < 80 {
