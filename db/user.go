@@ -15,13 +15,18 @@ import (
 type PIIFinding struct {
 	PIIType       string    `bson:"pii_type"`
 	DetectedValue string    `bson:"detected_value"`
-	FieldName     string    `bson:"field_name,omitempty"`
-	Location      string    `bson:"location"`
-	DetectionMode string    `bson:"detection_mode"`
+	FieldName     string    `bson:"-"`
+	Location      string    `bson:"-"`
+	DetectionMode string    `bson:"-"`
 	RiskLevel     string    `bson:"risk_level"`
 	Category      string    `bson:"category"`
 	Tags          []string  `bson:"tags"`
-	Timestamp     time.Time `bson:"timestamp"`
+	Timestamp     time.Time `bson:"-"`     
+	PIICount        int          `bson:"-"`
+	RiskScore       int          `bson:"-"`
+	HighestRisk     string       `bson:"-"`
+	HasPII          bool         `bson:"-"`
+	LastPIIAnalysis time.Time    `bson:"-"`
 }
 
 type UserAPIData struct {
@@ -32,14 +37,8 @@ type UserAPIData struct {
 	RequestBody     string             `bson:"request_body,omitempty"`
 	ResponseBody    string             `bson:"response_body,omitempty"`
 	SensitiveFields []string           `bson:"sensitive_fields,omitempty"`
-	
-	PIIFindings     []PIIFinding `bson:"pii_findings,omitempty"`
-	PIICount        int          `bson:"pii_count,omitempty"`
-	RiskScore       int          `bson:"risk_score,omitempty"`
-	HighestRisk     string       `bson:"highest_risk,omitempty"`
-	HasPII          bool         `bson:"has_pii,omitempty"`
-	LastPIIAnalysis time.Time    `bson:"last_pii_analysis,omitempty"`
-	
+	RiskLevel      string 			   `bson:"risk_level,omitempty"`
+	PIIFindings     []PIIFinding 	   `bson:"pii_findings,omitempty"`
 	Timestamp       time.Time          `bson:"timestamp"`
 	Source          string             `bson:"source"`
 	Url             string             `bson:"url"`
@@ -99,11 +98,6 @@ func UpdateUserAPIDataWithPII(apiEndpoint, method string, findings []PIIFinding,
 	update := bson.M{
 		"$set": bson.M{
 			"pii_findings":      findings,
-			"pii_count":         len(findings),
-			"risk_score":        riskScore,
-			"highest_risk":      highestRisk,
-			"has_pii":           len(findings) > 0,
-			"last_pii_analysis": time.Now(),
 		},
 	}
 	
