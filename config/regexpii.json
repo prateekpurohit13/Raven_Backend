@@ -47,7 +47,7 @@
         },
         "UK_NINO": {
           "fieldNames": ["nino", "nationalinsurance", "nationalinsurancenumber", "ni"],
-          "valuePattern": "(?!BG)(?!GB)(?!NK)(?!KN)(?!NT)(?!TN)(?!ZZ)(?! ?.O)[A-CE-EG-HJ-PR-TW-Za-ce-eg-hj-pr-tw-z]{2}[0-9]{6}[A-Da-d]{1}",
+          "valuePattern": "^[A-Za-z]{2}[0-9]{6}[A-Za-z]$",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
@@ -227,7 +227,7 @@
         },
         "UK_NINO": {
           "name": "United Kingdom National Insurance Number",
-          "regexPattern": "(?!BG)(?!GB)(?!NK)(?!KN)(?!NT)(?!TN)(?!ZZ)(?! ?.O)[A-CE-EG-HJ-PR-TW-Za-ce-eg-hj-pr-tw-z]{2}[0-9]{6}[A-Da-d]{1}",
+          "regexPattern": "^[A-Za-z]{2}[0-9]{6}[A-Za-z]$",
           "riskLevel": "HIGH",
           "category": "FINANCE",
           "tags": ["FINANCE", "PII"]
