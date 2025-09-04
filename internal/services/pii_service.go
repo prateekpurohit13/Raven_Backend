@@ -68,47 +68,42 @@ type PIIConfig struct {
 }
 
 type PIIService struct {
+	db             db.MongoInstance
 	config         PIIConfig
 	compiledRegex  map[string]*regexp.Regexp
 	fieldRegex     map[string]*regexp.Regexp
 	keywordRegex   map[string]*regexp.Regexp
 }
 
-func NewPIIService() (*PIIService, error) {
+func NewPIIService(mongoInstance db.MongoInstance) (*PIIService, error) {
 	service := &PIIService{
+		db:            mongoInstance,
 		compiledRegex: make(map[string]*regexp.Regexp),
 		fieldRegex:    make(map[string]*regexp.Regexp),
 		keywordRegex:  make(map[string]*regexp.Regexp),
 	}
-
 	if err := service.loadPIIConfig(); err != nil {
 		return nil, fmt.Errorf("failed to load PII config: %w", err)
 	}
-
 	if err := service.compileRegexPatterns(); err != nil {
 		return nil, fmt.Errorf("failed to compile regex patterns: %w", err)
 	}
-
 	return service, nil
 }
 
 func (s *PIIService) loadPIIConfig() error {
 	configPath := filepath.Join("config", "regexpii.json")
-
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read PII config file: %w", err)
 	}
-
 	if err := json.Unmarshal(data, &s.config); err != nil {
 		return fmt.Errorf("failed to parse PII config JSON: %w", err)
 	}
-
 	log.Printf("Loaded PII config with %d field-based, %d value-only, and %d keyword-based patterns",
 		len(s.config.DetectionModes.FieldBased.Patterns),
 		len(s.config.DetectionModes.ValueOnly.Patterns),
 		len(s.config.DetectionModes.KeywordBased.Patterns))
-
 	return nil
 }
 
@@ -123,7 +118,6 @@ func (s *PIIService) compileRegexPatterns() error {
 			s.compiledRegex[fmt.Sprintf("field_%s", name)] = regex
 		}
 	}
-
 	for name, pattern := range s.config.DetectionModes.ValueOnly.Patterns {
 		if pattern.RegexPattern != "" {
 			regex, err := regexp.Compile(pattern.RegexPattern)
@@ -134,7 +128,6 @@ func (s *PIIService) compileRegexPatterns() error {
 			s.compiledRegex[fmt.Sprintf("value_%s", name)] = regex
 		}
 	}
-
 	for name, pattern := range s.config.DetectionModes.KeywordBased.Patterns {
 		if pattern.RegexPattern != "" {
 			regex, err := regexp.Compile(pattern.RegexPattern)
@@ -145,7 +138,6 @@ func (s *PIIService) compileRegexPatterns() error {
 			s.keywordRegex[name] = regex
 		}
 	}
-
 	log.Printf("Compiled %d regex patterns successfully", len(s.compiledRegex)+len(s.keywordRegex))
 	return nil
 }
@@ -154,19 +146,16 @@ func (s *PIIService) AnalyzePIIInAPIData(apiData db.UserAPIData) PIIAnalysisResu
 	result := PIIAnalysisResult{
 		APIEndpoint: apiData.APIEndpoint,
 		Method:      apiData.Method,
-		URL:         apiData.Url,
+		URL:         apiData.URL,
 		Findings:    []PIIDetectionResult{},
 		Timestamp:   time.Now(),
 	}
-
 	s.analyzeRequestHeaders(apiData.Headers, &result)
 	s.analyzeRequestBody(apiData.RequestBody, &result)
 	s.analyzeResponseBody(apiData.ResponseBody, &result)
-	s.analyzeURL(apiData.Url, &result)
-
+	s.analyzeURL(apiData.URL, &result)
 	result.TotalCount = len(result.Findings)
 	result.RiskScore, result.HighestRisk = s.calculateRiskMetrics(result.Findings)
-
 	return result
 }
 
@@ -181,7 +170,6 @@ func (s *PIIService) analyzeRequestBody(body string, result *PIIAnalysisResult) 
 	if body == "" || body == "[Invalid UTF-8 or Binary Data]" {
 		return
 	}
-
 	if s.isJSON(body) {
 		s.analyzeJSONForPII(body, "request_body", result)
 	} else {
@@ -194,7 +182,6 @@ func (s *PIIService) analyzeResponseBody(body string, result *PIIAnalysisResult)
 	if body == "" || body == "[Invalid UTF-8 or Binary Data]" {
 		return
 	}
-
 	if s.isJSON(body) {
 		s.analyzeJSONForPII(body, "response_body", result)
 	} else {
@@ -209,23 +196,18 @@ func (s *PIIService) analyzeURL(urlString string, result *PIIAnalysisResult) {
 		log.Printf("Error decoding URL: %v", err)
 		decodedURL = urlString
 	}
-
 	parsedURL, err := url.Parse(decodedURL)
 	if err != nil {
 		log.Printf("Error parsing URL: %v", err)
 		return
 	}
-
 	path := parsedURL.Path
 	pathSegments := strings.Split(path, "/")
-	
 	for i, segment := range pathSegments {
 		if segment != "" {
 			fieldName := s.inferFieldNameFromURL(pathSegments, i)
-			
 			findings := s.detectPIIInField(fieldName, segment, "url_path")
 			result.Findings = append(result.Findings, findings...)
-			
 			if fieldName == "url_path_segment" {
 				valueFindings := s.detectPIIInText("", segment, "url_path")
 				for _, finding := range valueFindings {
@@ -235,7 +217,6 @@ func (s *PIIService) analyzeURL(urlString string, result *PIIAnalysisResult) {
 			}
 		}
 	}
-
 	queryParams := parsedURL.Query()
 	for key, values := range queryParams {
 		for _, value := range values {
@@ -249,14 +230,12 @@ func (s *PIIService) inferFieldNameFromURL(pathSegments []string, currentIndex i
 	if currentIndex <= 0 || currentIndex >= len(pathSegments) {
 		return "url_path_segment"
 	}
-	
 	previousSegment := strings.ToLower(pathSegments[currentIndex-1])
-	
 	switch previousSegment {
 	case "apikey", "api-key", "api_key":
 		return "apikey"
 	case "token", "access-token", "access_token":
-		return "token" 
+		return "token"
 	case "key":
 		return "key"
 	case "id", "userid", "user-id", "user_id":
@@ -294,7 +273,6 @@ func (s *PIIService) inferFieldNameFromURL(pathSegments []string, currentIndex i
 func (s *PIIService) detectPIIInField(fieldName, fieldValue, location string) []PIIDetectionResult {
 	var findings []PIIDetectionResult
 	fieldNameLower := strings.ToLower(fieldName)
-
 	for patternName, pattern := range s.config.DetectionModes.FieldBased.Patterns {
 		for _, targetField := range pattern.FieldNames {
 			if strings.Contains(fieldNameLower, strings.ToLower(targetField)) {
@@ -318,7 +296,6 @@ func (s *PIIService) detectPIIInField(fieldName, fieldValue, location string) []
 			}
 		}
 	}
-
 	for patternName, pattern := range s.config.DetectionModes.KeywordBased.Patterns {
 		if regex, exists := s.keywordRegex[patternName]; exists {
 			if regex.MatchString(fieldName) {
@@ -336,24 +313,19 @@ func (s *PIIService) detectPIIInField(fieldName, fieldValue, location string) []
 			}
 		}
 	}
-
 	valueFindings := s.detectPIIInText(fieldNameLower, fieldValue, location)
 	for _, finding := range valueFindings {
 		finding.FieldName = fieldName
 		findings = append(findings, finding)
 	}
-
 	return findings
 }
 
 func (s *PIIService) detectPIIInText(fieldNameLower, text, location string) []PIIDetectionResult {
 	var findings []PIIDetectionResult
-
 	cardFields := []string{"cardnumber", "ccnumber", "creditcard", "card", "cc", "visa", "visacard", "mastercard", "maestro"}
-
 	for patternName, pattern := range s.config.DetectionModes.ValueOnly.Patterns {
 		skip := false
-		
 		if location != "url_path" {
 			for _, cardField := range cardFields {
 				if strings.Contains(fieldNameLower, cardField) {
@@ -362,11 +334,9 @@ func (s *PIIService) detectPIIInText(fieldNameLower, text, location string) []PI
 				}
 			}
 		}
-
 		if skip {
 			continue
 		}
-		
 		regexKey := fmt.Sprintf("value_%s", patternName)
 		if regex, exists := s.compiledRegex[regexKey]; exists {
 			matches := regex.FindAllString(text, -1)
@@ -384,7 +354,6 @@ func (s *PIIService) detectPIIInText(fieldNameLower, text, location string) []PI
 			}
 		}
 	}
-
 	return findings
 }
 
@@ -395,7 +364,6 @@ func (s *PIIService) analyzeJSONForPII(jsonStr, location string, result *PIIAnal
 		result.Findings = append(result.Findings, findings...)
 		return
 	}
-
 	s.analyzeJSONObject(jsonData, "", location, result)
 }
 
@@ -407,7 +375,6 @@ func (s *PIIService) analyzeJSONObject(data interface{}, prefix, location string
 			if prefix != "" {
 				fullKey = prefix + "." + key
 			}
-
 			switch val := value.(type) {
 			case string:
 				findings := s.detectPIIInField(key, val, location)
@@ -434,11 +401,9 @@ func (s *PIIService) calculateRiskMetrics(findings []PIIDetectionResult) (int, s
 	if len(findings) == 0 {
 		return 0, "NONE"
 	}
-
 	totalScore := 0
 	highestRisk := "LOW"
 	maxRiskValue := 0
-
 	for _, finding := range findings {
 		if riskValue, exists := s.config.RiskLevels[finding.RiskLevel]; exists {
 			totalScore += riskValue
@@ -448,7 +413,6 @@ func (s *PIIService) calculateRiskMetrics(findings []PIIDetectionResult) (int, s
 			}
 		}
 	}
-
 	return totalScore, highestRisk
 }
 
@@ -458,14 +422,12 @@ func (s *PIIService) isJSON(str string) bool {
 }
 
 func (s *PIIService) ProcessAllAPIDataForPII() ([]PIIAnalysisResult, error) {
-	apiDataList, err := db.FindAllAPIData()
+	apiDataList, err := s.db.FindAllAPIData()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch API data: %w", err)
 	}
-
 	var results []PIIAnalysisResult
 	log.Printf("Starting PII analysis for %d API entries", len(apiDataList))
-
 	for _, apiData := range apiDataList {
 		result := s.AnalyzePIIInAPIData(apiData)
 		if result.TotalCount > 0 {
@@ -475,7 +437,6 @@ func (s *PIIService) ProcessAllAPIDataForPII() ([]PIIAnalysisResult, error) {
 				result.HighestRisk, result.RiskScore)
 		}
 	}
-
 	log.Printf("PII analysis complete. Found PII in %d/%d API entries", len(results), len(apiDataList))
 	return results, nil
 }
@@ -489,12 +450,10 @@ func (s *PIIService) GetPIIStats(results []PIIAnalysisResult) map[string]interfa
 		"category_breakdown":    make(map[string]int),
 		"detection_mode_breakdown": make(map[string]int),
 	}
-
 	totalFindings := 0
 	riskBreakdown := make(map[string]int)
 	categoryBreakdown := make(map[string]int)
 	modeBreakdown := make(map[string]int)
-
 	for _, result := range results {
 		totalFindings += result.TotalCount
 		for _, finding := range result.Findings {
@@ -503,11 +462,9 @@ func (s *PIIService) GetPIIStats(results []PIIAnalysisResult) map[string]interfa
 			modeBreakdown[finding.DetectionMode]++
 		}
 	}
-
 	stats["total_pii_findings"] = totalFindings
 	stats["risk_level_breakdown"] = riskBreakdown
 	stats["category_breakdown"] = categoryBreakdown
 	stats["detection_mode_breakdown"] = modeBreakdown
-
 	return stats
 }

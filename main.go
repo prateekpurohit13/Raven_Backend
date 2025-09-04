@@ -1,43 +1,73 @@
 package main
 
 import (
+	"context"
 	"log"
-	//"net/http"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/RavenSec10/Raven_Backend/db"
 	"github.com/RavenSec10/Raven_Backend/internal/routes"
 	"github.com/RavenSec10/Raven_Backend/internal/services"
-	"github.com/RavenSec10/Raven_Backend/internal/handlers"
-
-
 )
 
 func main() {
-
-	err := db.ConnectDB()
-	if err != nil{
+	mongoInstance, err := db.ConnectDB()
+	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	harService, err := services.NewHARService()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	defer mongoInstance.CloseDB(ctx)
+
+	piiService, err := services.NewPIIService(mongoInstance)
 	if err != nil {
-		log.Fatalf("Failed to initialize HAR service: %v", err)
+		log.Fatalf("Failed to initialize PII service: %v", err)
 	}
-	harHandler := handlers.NewHARHandler(harService)
-	harAPIHandler := handlers.NewHarAPIHandler()
+
+	kafkaBrokerAddress := "localhost:9093"
+	kafkaTopic := "api_logs"
+	kafkaGroupID := "raven-backend-consumer-group"
+	kafkaConsumerService := services.NewKafkaConsumerService(kafkaBrokerAddress, kafkaTopic, kafkaGroupID, piiService, mongoInstance)
+
+	go kafkaConsumerService.Start(ctx)
+
 	router := gin.Default()
 
-	routes.SetupRoutes(router, harHandler, harAPIHandler)
+	routes.SetupRoutes(router)
 
-	// Add a root route for testing
-	//router.GET("/", func(c *gin.Context) {
-	//	c.JSON(http.StatusOK, gin.H{"message": "Welcome to RAVEN API"})
-	//})
+	srv := &http.Server{
+		Addr:    ":7000",
+		Handler: router,
+	}
 
-	// Register the upload route
-	//router.POST("/upload", harHandler.UploadHAR)
-	
-	log.Println("Server running on :8080")
-	router.Run(":8080")
+	go func() {
+		log.Println("Server running on :7000")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server and Kafka consumer...")
+
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
+	}
+
+	log.Println("Server and Kafka consumer exited properly.")
 }

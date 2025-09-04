@@ -14,10 +14,13 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-var DB *mongo.Database
+type MongoInstance struct {
+	Client *mongo.Client
+	DB     *mongo.Database
+}
 
 // ConnectDB initializes the MongoDB connection
-func ConnectDB() error {
+func ConnectDB() (MongoInstance, error) {
 	// Load .env file
 	err := godotenv.Load()
 	if err != nil {
@@ -27,7 +30,7 @@ func ConnectDB() error {
 	// Get DATABASE_URL from environment
 	mongoURI := os.Getenv("DATABASE_URL")
 	if mongoURI == "" {
-		return fmt.Errorf("DATABASE_URL is not set in the environment")
+		return MongoInstance{}, fmt.Errorf("DATABASE_URL is not set in the environment")
 	}
 
 	// Get DATABASE_NAME from environment
@@ -45,36 +48,43 @@ func ConnectDB() error {
 	defer cancel()
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		return fmt.Errorf("MongoDB connection error: %w", err)
+		return MongoInstance{}, fmt.Errorf("MongoDB connection error: %w", err)
 	}
 
 	// Check the connection
 	err = client.Ping(ctx, readpref.Primary())
 	if err != nil {
-		return fmt.Errorf("failed to ping MongoDB: %w", err)
+		if disconnectErr := client.Disconnect(context.Background()); disconnectErr != nil {
+			log.Printf("Error during disconnect after failed ping: %v", disconnectErr)
+		}
+		return MongoInstance{}, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
 
 	// Select the database
-	DB = client.Database(dbName)
+	db := client.Database(dbName)
 	log.Printf("Connected to MongoDB database: %s\n", dbName)
 
+	mi := MongoInstance{
+		Client: client,
+		DB:     db,
+	}
 	// Create indexes (optional)
-	err = setupIndexes(ctx)
+	err = mi.setupIndexes(ctx)
 	if err != nil {
 		log.Printf("Error setting up indexes: %v", err)
 	}
 
-	return nil
+	return mi, nil
 }
 
 // GetCollection returns a reference to a MongoDB collection
-func GetCollection(collectionName string) *mongo.Collection {
-	return DB.Collection(collectionName)
+func (mi *MongoInstance) GetCollection(collectionName string) *mongo.Collection {
+	return mi.DB.Collection(collectionName)
 }
 
 // setupIndexes creates necessary indexes
-func setupIndexes(ctx context.Context) error {
-	collection := GetCollection("user_api_data")
+func (mi *MongoInstance) setupIndexes(ctx context.Context) error {
+	collection := mi.GetCollection("user_api_data")
 	indexModel := mongo.IndexModel{
 		Keys: bson.D{ // Corrected: Use keyed fields
 			{Key: "api_endpoint", Value: 1},
@@ -87,5 +97,24 @@ func setupIndexes(ctx context.Context) error {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
 	log.Println("Created index on api_endpoint and timestamp")
+	return nil
+}
+
+func (mi *MongoInstance) CloseDB(ctx context.Context) {
+	if mi.Client != nil {
+		if err := mi.Client.Disconnect(ctx); err != nil {
+			log.Printf("Error disconnecting from MongoDB: %v", err)
+		} else {
+			log.Println("Disconnected from MongoDB.")
+		}
+	}
+}
+
+func (mi *MongoInstance) InsertOne(ctx context.Context, collectionName string, data interface{}) error {
+	collection := mi.GetCollection(collectionName)
+	_, err := collection.InsertOne(ctx, data)
+	if err != nil {
+		return fmt.Errorf("failed to insert document into collection '%s': %w", collectionName, err)
+	}
 	return nil
 }
