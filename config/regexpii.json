@@ -198,6 +198,15 @@
           "riskLevel": "MEDIUM",
           "category": "PII",
           "tags": ["PII"]
+        },
+        "AUTHORIZATION_TOKEN": {
+          "fieldNames": ["authorization", "Authorization", "x-auth-token", "x-api-key"],
+          "valuePattern": "^(Bearer|Basic|X-Auth-Token)\\s+.*$",
+          "name": "Authorization Token",
+          "riskLevel": "CRITICAL",
+          "category": "CREDENTIAL",
+          "tags": ["CREDENTIAL", "AUTHENTICATION"],
+          "applyTo": "headers"
         }
       }
     },

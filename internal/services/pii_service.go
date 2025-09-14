@@ -3,7 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"log"
 	"net/url"
 	"path/filepath"
@@ -27,25 +27,25 @@ type PIIDetectionResult struct {
 }
 
 type PIIAnalysisResult struct {
-	APIEndpoint  string               `json:"api_endpoint"`
-	Method       string               `json:"method"`
-	URL          string               `json:"url"`
-	Findings     []PIIDetectionResult `json:"findings"`
-	TotalCount   int                  `json:"total_count"`
-	RiskScore    int                  `json:"risk_score"`
-	HighestRisk  string               `json:"highest_risk"`
-	Timestamp    time.Time            `json:"timestamp"`
+	APIEndpoint string               `json:"api_endpoint"`
+	Method      string               `json:"method"`
+	URL         string               `json:"url"`
+	Findings    []PIIDetectionResult `json:"findings"`
+	TotalCount  int                  `json:"total_count"`
+	RiskScore   int                  `json:"risk_score"`
+	HighestRisk string               `json:"highest_risk"`
+	Timestamp   time.Time            `json:"timestamp"`
 }
 
 type PIIPattern struct {
-	FieldNames    []string `json:"fieldNames,omitempty"`
-	ValuePattern  string   `json:"valuePattern,omitempty"`
-	RegexPattern  string   `json:"regexPattern,omitempty"`
-	Name          string   `json:"name,omitempty"`
-	RiskLevel     string   `json:"riskLevel"`
-	Category      string   `json:"category"`
-	Tags          []string `json:"tags"`
-	ApplyTo       string   `json:"applyTo,omitempty"`
+	FieldNames   []string `json:"fieldNames,omitempty"`
+	ValuePattern string   `json:"valuePattern,omitempty"`
+	RegexPattern string   `json:"regexPattern,omitempty"`
+	Name         string   `json:"name,omitempty"`
+	RiskLevel    string   `json:"riskLevel"`
+	Category     string   `json:"category"`
+	Tags         []string `json:"tags"`
+	ApplyTo      string   `json:"applyTo,omitempty"`
 }
 
 type PIIConfig struct {
@@ -68,11 +68,11 @@ type PIIConfig struct {
 }
 
 type PIIService struct {
-	db             db.MongoInstance
-	config         PIIConfig
-	compiledRegex  map[string]*regexp.Regexp
-	fieldRegex     map[string]*regexp.Regexp
-	keywordRegex   map[string]*regexp.Regexp
+	db            db.MongoInstance
+	config        PIIConfig
+	compiledRegex map[string]*regexp.Regexp
+	fieldRegex    map[string]*regexp.Regexp
+	keywordRegex  map[string]*regexp.Regexp
 }
 
 func NewPIIService(mongoInstance db.MongoInstance) (*PIIService, error) {
@@ -93,7 +93,7 @@ func NewPIIService(mongoInstance db.MongoInstance) (*PIIService, error) {
 
 func (s *PIIService) loadPIIConfig() error {
 	configPath := filepath.Join("config", "regexpii.json")
-	data, err := ioutil.ReadFile(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read PII config file: %w", err)
 	}
@@ -150,44 +150,54 @@ func (s *PIIService) AnalyzePIIInAPIData(apiData db.UserAPIData) PIIAnalysisResu
 		Findings:    []PIIDetectionResult{},
 		Timestamp:   time.Now(),
 	}
-	s.analyzeRequestHeaders(apiData.Headers, &result)
-	s.analyzeRequestBody(apiData.RequestBody, &result)
-	s.analyzeResponseBody(apiData.ResponseBody, &result)
+
+	s.analyzeHeaders(apiData.RequestHeaders, "request_headers", &result)
+	s.analyzeHeaders(apiData.ResponseHeaders, "response_headers", &result)	
+	s.analyzeGenericBody(apiData.RequestBody, "request_body", &result)
+	s.analyzeGenericBody(apiData.ResponseBody, "response_body", &result)
 	s.analyzeURL(apiData.URL, &result)
 	result.TotalCount = len(result.Findings)
 	result.RiskScore, result.HighestRisk = s.calculateRiskMetrics(result.Findings)
 	return result
 }
 
-func (s *PIIService) analyzeRequestHeaders(headers map[string]string, result *PIIAnalysisResult) {
+func (s *PIIService) analyzeHeaders(headers map[string]string, location string, result *PIIAnalysisResult) {
 	for fieldName, fieldValue := range headers {
-		findings := s.detectPIIInField(fieldName, fieldValue, "request_headers")
+		findings := s.detectPIIInField(fieldName, fieldValue, location)
 		result.Findings = append(result.Findings, findings...)
 	}
 }
 
-func (s *PIIService) analyzeRequestBody(body string, result *PIIAnalysisResult) {
-	if body == "" || body == "[Invalid UTF-8 or Binary Data]" {
+func (s *PIIService) analyzeGenericBody(body interface{}, location string, result *PIIAnalysisResult) {
+	if body == nil {
 		return
 	}
-	if s.isJSON(body) {
-		s.analyzeJSONForPII(body, "request_body", result)
-	} else {
-		findings := s.detectPIIInText("", body, "request_body")
-		result.Findings = append(result.Findings, findings...)
+	switch v := body.(type) {
+	case string:
+		if v == "" || v == "[Invalid UTF-8 or Binary Data]" || v == "[No response body captured]" || strings.HasPrefix(v, "[Error processing") {
+			return
+		}
+		if s.isJSON(v) {
+			s.analyzeJSONForPII(v, location, result)
+		} else {
+			findings := s.detectPIIInText("", v, location)
+			result.Findings = append(result.Findings, findings...)
+		}
+	case map[string]interface{}:
+		s.analyzeJSONObject(v, "", location, result)
+	default:
+		log.Printf("Warning: analyzeGenericBody received unexpected body type %T at %s", v, location)
 	}
 }
 
-func (s *PIIService) analyzeResponseBody(body string, result *PIIAnalysisResult) {
-	if body == "" || body == "[Invalid UTF-8 or Binary Data]" {
+func (s *PIIService) analyzeJSONForPII(jsonStr, location string, result *PIIAnalysisResult) {
+	var jsonData interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &jsonData); err != nil {
+		findings := s.detectPIIInText("", jsonStr, location)
+		result.Findings = append(result.Findings, findings...)
 		return
 	}
-	if s.isJSON(body) {
-		s.analyzeJSONForPII(body, "response_body", result)
-	} else {
-		findings := s.detectPIIInText("", body, "response_body")
-		result.Findings = append(result.Findings, findings...)
-	}
+	s.analyzeJSONObject(jsonData, "", location, result)
 }
 
 func (s *PIIService) analyzeURL(urlString string, result *PIIAnalysisResult) {
@@ -357,16 +367,6 @@ func (s *PIIService) detectPIIInText(fieldNameLower, text, location string) []PI
 	return findings
 }
 
-func (s *PIIService) analyzeJSONForPII(jsonStr, location string, result *PIIAnalysisResult) {
-	var jsonData interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &jsonData); err != nil {
-		findings := s.detectPIIInText("", jsonStr, location)
-		result.Findings = append(result.Findings, findings...)
-		return
-	}
-	s.analyzeJSONObject(jsonData, "", location, result)
-}
-
 func (s *PIIService) analyzeJSONObject(data interface{}, prefix, location string, result *PIIAnalysisResult) {
 	switch v := data.(type) {
 	case map[string]interface{}:
@@ -443,11 +443,11 @@ func (s *PIIService) ProcessAllAPIDataForPII() ([]PIIAnalysisResult, error) {
 
 func (s *PIIService) GetPIIStats(results []PIIAnalysisResult) map[string]interface{} {
 	stats := map[string]interface{}{
-		"total_apis_analyzed":    0,
-		"apis_with_pii":         len(results),
-		"total_pii_findings":    0,
-		"risk_level_breakdown":  make(map[string]int),
-		"category_breakdown":    make(map[string]int),
+		"total_apis_analyzed":      0,
+		"apis_with_pii":            len(results),
+		"total_pii_findings":       0,
+		"risk_level_breakdown":     make(map[string]int),
+		"category_breakdown":       make(map[string]int),
 		"detection_mode_breakdown": make(map[string]int),
 	}
 	totalFindings := 0

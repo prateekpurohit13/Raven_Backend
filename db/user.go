@@ -29,9 +29,10 @@ type UserAPIData struct {
 	APIEndpoint     string             `bson:"api_endpoint"`
 	Method          string             `bson:"method"`
 	URL             string             `bson:"url"`
-	Headers         map[string]string  `bson:"headers"`
-	RequestBody     string             `bson:"request_body,omitempty"`
-	ResponseBody    string             `bson:"response_body,omitempty"`
+	RequestHeaders  map[string]string  `bson:"request_headers,omitempty"`
+	ResponseHeaders map[string]string  `bson:"response_headers,omitempty"`
+	RequestBody     interface{}        `bson:"request_body,omitempty"`
+	ResponseBody    interface{}        `bson:"response_body,omitempty"`
 	Source          string             `bson:"source"`
 	Timestamp       time.Time          `bson:"timestamp"`
 	HasPII          bool               `bson:"has_pii"`

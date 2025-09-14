@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,42 +13,60 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-// KafkaConsumerService holds the dependencies for the consumer.
 type KafkaConsumerService struct {
 	reader     *kafka.Reader
 	piiService *PIIService
 	mongo      db.MongoInstance
 }
 
-// RawNginxLog represents the structure of the JSON log coming from NGINX.
-// Using a struct is safer than map[string]interface{} as it provides type safety.
-type RawNginxLog struct {
-	Timestamp            string  `json:"timestamp"`
-	ClientIP             string  `json:"client_ip"`
-	Method               string  `json:"method"`
-	URI                  string  `json:"uri"`
-	Protocol             string  `json:"protocol"`
-	Status               int     `json:"status"`
-	ResponseSize         int     `json:"response_size"`
-	RequestBody          string  `json:"request_body"`
-	ResponseBody         string  `json:"response_body"` // Assuming your NGINX config provides this
-	UserAgent            string  `json:"user_agent"`
-	Host                 string  `json:"host"`
-	ContentType          string  `json:"content_type"`
-	ResponseContentType  string  `json:"response_content_type"`
+type KafkaLogMessage struct {
+	TimestampMetadata time.Time `json:"@timestamp"`
+	Metadata          struct {
+		Beat    string `json:"beat"`
+		Type    string `json:"type"`
+		Version string `json:"version"`
+	} `json:"@metadata"`
+	Environment         string            `json:"environment"`
+	StatusText          string            `json:"status"`
+	UserAgent           string            `json:"user_agent"`
+	ResponseHeaders     map[string]string `json:"responseHeaders"`
+	RequestBodySize     int               `json:"request_body_size"`
+	IsGzipCompressed    bool              `json:"is_gzip_compressed"`
+	Service             string            `json:"service"`
+	HasRequestBody      bool              `json:"has_request_body"`
+	ResponsePayload     interface{}       `json:"responsePayload"`
+	HasResponseBody     bool              `json:"has_response_body"`
+	LogType             string            `json:"log_type"`
+	RequestPayload      interface{}       `json:"requestPayload"`
+	RequestTime         string            `json:"request_time"`
+	Method              string            `json:"method"`
+	NjsTime             string            `json:"time"`
+	Referer             string            `json:"referer"`
+	ResponseSize        string            `json:"response_size"`
+	ContainerName       string            `json:"container_name"`
+	RequestHeaders      map[string]string `json:"requestHeaders"`
+	Source              string            `json:"source"`
+	LogSource           string            `json:"log_source"`
+	ContentType         string            `json:"content_type"`
+	ResponseContentType string            `json:"response_content_type"`
+	IP                  string            `json:"ip"`
+	RequestSize         string            `json:"request_size"`
+	Type                string            `json:"type"`
+	StatusCode          string            `json:"statusCode"`
+	UpstreamTime        string            `json:"upstream_time"`
+	Path                string            `json:"path"`
+	ResponseBodySize    int               `json:"response_body_size"`
+	Host                string            `json:"host"`
 }
-
-
-// NewKafkaConsumerService creates a new instance of the consumer service.
+// creates a new instance of the consumer service.
 func NewKafkaConsumerService(brokerAddress string, topic string, groupID string, piiSvc *PIIService, mongoInstance db.MongoInstance) *KafkaConsumerService {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{brokerAddress},
 		Topic:   topic,
 		GroupID: groupID,
-		// Start consuming from the latest message. Change to kafka.FirstOffset to process old messages.
 		StartOffset: kafka.LastOffset, 
-		MinBytes:    10e3, // 10KB
-		MaxBytes:    10e6, // 10MB
+		MinBytes:    10e3,
+		MaxBytes:    10e6,
 		MaxWait:     2 * time.Second,
 	})
 
@@ -64,19 +83,14 @@ func (s *KafkaConsumerService) Start(ctx context.Context) {
 	defer s.reader.Close()
 
 	for {
-		// Use FetchMessage for more control over commits and context cancellation
 		msg, err := s.reader.FetchMessage(ctx)
 		if err != nil {
-			// If context is canceled, the loop will break, which is expected for shutdown
 			if ctx.Err() != nil {
 				break
 			}
 			log.Printf("Error fetching Kafka message: %v", err)
 			continue
 		}
-
-		// Process the message in a separate goroutine to allow concurrent processing if needed.
-		// For now, we do it synchronously to keep it simple.
 		s.processMessage(ctx, msg)
 	}
 
@@ -87,70 +101,78 @@ func (s *KafkaConsumerService) Start(ctx context.Context) {
 func (s *KafkaConsumerService) processMessage(ctx context.Context, msg kafka.Message) {
 	log.Printf("Received message from Kafka topic '%s', partition %d, offset %d\n", msg.Topic, msg.Partition, msg.Offset)
 
-	// 1. Unmarshal the raw NGINX log
-	var rawLog RawNginxLog
-	if err := json.Unmarshal(msg.Value, &rawLog); err != nil {
-		log.Printf("Error unmarshaling Kafka message: %v. Skipping message.", err)
-		// Commit message even if it's invalid, to avoid reprocessing it forever
+	var rawKafkaLog KafkaLogMessage
+	if err := json.Unmarshal(msg.Value, &rawKafkaLog); err != nil {
+		log.Printf("Error unmarshaling Kafka message into KafkaLogMessage: %v. Message: %s. Skipping message.", err, string(msg.Value))
 		s.commitMessage(ctx, msg)
 		return
 	}
 
-	// 2. Map the raw log to the db.UserAPIData struct for PII analysis
-	apiData := s.mapRawLogToUserAPIData(rawLog)
+	apiData, err := s.mapKafkaLogToUserAPIData(rawKafkaLog)
+	if err != nil {
+		log.Printf("Error mapping Kafka log to UserAPIData: %v. Skipping message.", err)
+		s.commitMessage(ctx, msg)
+		return
+	}
 
-	// 3. Analyze for PII using the existing PIIService
 	piiAnalysis := s.piiService.AnalyzePIIInAPIData(apiData)
-
-	// 4. Enrich the apiData struct with the analysis results
 	s.enrichUserAPIData(&apiData, piiAnalysis)
 	
 	if apiData.HasPII {
 		log.Printf("PII DETECTED in %s %s. Risk: %s, Findings: %d", apiData.Method, apiData.APIEndpoint, apiData.HighestRisk, apiData.PIICount)
 	}
-
-	// 5. Save the enriched data to MongoDB
 	if err := s.mongo.SaveUserAPIData(apiData); err != nil {
 		log.Printf("Error saving API data to MongoDB: %v", err)
-		// Do NOT commit the message if saving fails, so we can retry later
 		return
 	}
-
-	// 6. Commit the message to Kafka to mark it as processed
 	s.commitMessage(ctx, msg)
 }
 
-// mapRawLogToUserAPIData converts the incoming NGINX log format to the database model.
-func (s *KafkaConsumerService) mapRawLogToUserAPIData(rawLog RawNginxLog) db.UserAPIData {
-	// Parse the timestamp from the NGINX log
-	timestamp, err := time.Parse(time.RFC3339, rawLog.Timestamp)
-	if err != nil {
-		log.Printf("Warning: Could not parse timestamp '%s'. Using current time. Error: %v", rawLog.Timestamp, err)
-		timestamp = time.Now()
+func (s *KafkaConsumerService) mapKafkaLogToUserAPIData(rawLog KafkaLogMessage) (db.UserAPIData, error) {
+	njsTimeSeconds, err := parseNjsTime(rawLog.NjsTime)
+	parsedTimestamp := rawLog.TimestampMetadata
+	if err == nil {
+		parsedTimestamp = njsTimeSeconds
+	} else {
+		log.Printf("Warning: Could not parse NJS timestamp '%s'. Using Filebeat's timestamp. Error: %v", rawLog.NjsTime, err)
 	}
-
-	// Construct the full URL
-	// Note: NGINX log doesn't provide the scheme (http/https) directly, so we assume http for now.
-	fullURL := fmt.Sprintf("http://%s%s", rawLog.Host, rawLog.URI)
+	scheme := "http"
+	host := rawLog.Host
+	if strings.HasPrefix(rawLog.Host, "https://") {
+		scheme = "https"
+		host = strings.TrimPrefix(rawLog.Host, "https://")
+	} else if strings.HasPrefix(rawLog.Host, "http://") {
+		scheme = "http"
+		host = strings.TrimPrefix(rawLog.Host, "http://")
+	}
 	
-	// API Endpoint is often just the path, which is rawLog.URI
-	apiEndpoint := rawLog.URI
-	// You might want to remove query params for a cleaner endpoint name
+	fullURL := fmt.Sprintf("%s://%s%s", scheme, host, rawLog.Path)
+	apiEndpoint := rawLog.Path
 	if idx := strings.Index(apiEndpoint, "?"); idx != -1 {
 		apiEndpoint = apiEndpoint[:idx]
 	}
 
 	return db.UserAPIData{
-		APIEndpoint:  apiEndpoint,
-		Method:       rawLog.Method,
-		URL:          fullURL,
-		Headers:      map[string]string{"User-Agent": rawLog.UserAgent, "Content-Type": rawLog.ContentType}, // NGINX log format has limited headers, adapt as needed
-		RequestBody:  rawLog.RequestBody,
-		ResponseBody: rawLog.ResponseBody,
-		Source:       "Kafka Stream",
-		Timestamp:    timestamp,
-	}
+		APIEndpoint:     apiEndpoint,
+		Method:          rawLog.Method,
+		URL:             fullURL,
+		RequestHeaders:  rawLog.RequestHeaders,
+		ResponseHeaders: rawLog.ResponseHeaders,
+		RequestBody:     rawLog.RequestPayload,
+		ResponseBody:    rawLog.ResponsePayload,
+		Source:          rawLog.Source,
+		Timestamp:       parsedTimestamp,
+	}, nil
 }
+
+func parseNjsTime(njsTimeString string) (time.Time, error) {
+	seconds, err := strconv.ParseInt(njsTimeString, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse NJS time string '%s' as integer seconds: %w", njsTimeString, err)
+	}
+	return time.Unix(seconds, 0), nil
+}
+
 
 // enrichUserAPIData populates the PII summary fields in the UserAPIData struct.
 func (s *KafkaConsumerService) enrichUserAPIData(apiData *db.UserAPIData, piiAnalysis PIIAnalysisResult) {
@@ -159,7 +181,6 @@ func (s *KafkaConsumerService) enrichUserAPIData(apiData *db.UserAPIData, piiAna
 	apiData.RiskScore = piiAnalysis.RiskScore
 	apiData.HighestRisk = piiAnalysis.HighestRisk
 
-	// Convert PII findings from the service model to the DB model
 	var dbFindings []db.PIIFinding
 	var sensitiveFieldsMap = make(map[string]bool)
 	
@@ -175,7 +196,6 @@ func (s *KafkaConsumerService) enrichUserAPIData(apiData *db.UserAPIData, piiAna
 			Tags:          finding.Tags,
 			Timestamp:     finding.Timestamp,
 		})
-		// Populate sensitive fields for quick reference
 		if !sensitiveFieldsMap[finding.PIIType] {
 			apiData.SensitiveFields = append(apiData.SensitiveFields, finding.PIIType)
 			sensitiveFieldsMap[finding.PIIType] = true
@@ -184,7 +204,6 @@ func (s *KafkaConsumerService) enrichUserAPIData(apiData *db.UserAPIData, piiAna
 	apiData.PIIFindings = dbFindings
 }
 
-// commitMessage commits the offset for a given message.
 func (s *KafkaConsumerService) commitMessage(ctx context.Context, msg kafka.Message) {
 	if err := s.reader.CommitMessages(ctx, msg); err != nil {
 		log.Printf("Failed to commit Kafka message offset %d: %v", msg.Offset, err)
