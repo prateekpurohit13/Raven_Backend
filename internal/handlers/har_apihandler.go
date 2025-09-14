@@ -14,36 +14,22 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type PIIFinding struct {
-	PIIType       string    `bson:"pii_type"`
-	DetectedValue string    `bson:"detected_value"`
-	RiskLevel     string    `bson:"risk_level"`
-	Category      string    `bson:"category"`
-	Tags          []string  `bson:"tags"`
+type HarAPIHandler struct {
+	DB db.MongoInstance
 }
-// Define the UserAPIData struct
-type UserAPIData struct {
-	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	APIEndpoint     string             `bson:"api_endpoint" json:"api_endpoint"`
-	Method          string             `bson:"method" json:"method"`
-	Headers         map[string]string  `bson:"headers" json:"headers"`
-	RequestBody     string             `bson:"request_body,omitempty" json:"request_body"`
-	ResponseBody    string             `bson:"response_body,omitempty" json:"response_body"`
-	SensitiveFields []string           `bson:"sensitive_fields,omitempty" json:"sensitive_fields"`
-	RiskLevel      string 			   `bson:"risk_level,omitempty" json:"risk_level"`
-	PIIFindings     []PIIFinding       `bson:"pii_findings,omitempty" json:"pii_findings"`
-	Timestamp       time.Time          `bson:"timestamp" json:"timestamp"`
-	Source          string             `bson:"source" json:"source"`
-	Url             string             `bson:"url" json:"url"`
+
+func NewHarAPIHandler(mongoInstance db.MongoInstance) *HarAPIHandler {
+	return &HarAPIHandler{
+		DB: mongoInstance,
+	}
 }
 
 type PaginatedResponse struct {
-	Items []UserAPIData `json:"items"`
-	Total int64         `json:"total"`
+	Items []db.UserAPIData `json:"items"`
+	Total int64            `json:"total"`
 }
 
-func getHarEntries(c *gin.Context) {
-	
+func (h *HarAPIHandler) getHarEntries(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	limitStr := c.DefaultQuery("limit", "10")
 	searchQuery := c.Query("query")
@@ -62,13 +48,12 @@ func getHarEntries(c *gin.Context) {
 
 	skip := (page - 1) * limit
 
-	// Build the filter based on the search query
 	filter := bson.M{}
 	if searchQuery != "" {
 		filter["api_endpoint"] = bson.M{"$regex": primitive.Regex{Pattern: searchQuery, Options: "i"}}
 	}
 
-	collection := db.GetCollection("user_api_data")
+	collection := h.DB.GetCollection("user_api_data")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -89,7 +74,7 @@ func getHarEntries(c *gin.Context) {
 	}
 	defer cursor.Close(ctx)
 
-	var apiData []UserAPIData
+	var apiData []db.UserAPIData
 	if err := cursor.All(ctx, &apiData); err != nil {
 		log.Printf("Failed to decode API data: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode API data"})
@@ -104,7 +89,7 @@ func getHarEntries(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func getHarEntry(c *gin.Context) {
+func (h *HarAPIHandler) getHarEntry(c *gin.Context) {
 	idStr := c.Param("id")
 	if idStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID parameter is required"})
@@ -118,27 +103,24 @@ func getHarEntry(c *gin.Context) {
 	}
 
 	filter := bson.M{"_id": objectID}
-	collection := db.GetCollection("user_api_data")
+	collection := h.DB.GetCollection("user_api_data")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var apiData UserAPIData
+	var apiData db.UserAPIData
 	err = collection.FindOne(ctx, filter).Decode(&apiData)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "API data not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": []UserAPIData{apiData}, "total": 1})
+	c.JSON(http.StatusOK, gin.H{"items": []db.UserAPIData{apiData}, "total": 1})
 }
-
-type HarAPIHandler struct{}
 
 func (h *HarAPIHandler) SetupHarRoutes(router *gin.Engine) {
-	router.GET("/api/har-entries", getHarEntries)
-	router.GET("/api/har-entries/:id", getHarEntry)
-}
-
-func NewHarAPIHandler() *HarAPIHandler {
-	return &HarAPIHandler{}
+	apiGroup := router.Group("/api")
+	{
+		apiGroup.GET("/har-entries", h.getHarEntries)
+		apiGroup.GET("/har-entries/:id", h.getHarEntry)
+	}
 }
