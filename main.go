@@ -40,7 +40,7 @@ func main() {
 
 	router := gin.Default()
 
-	routes.SetupRoutes(router)
+	routes.SetupRoutes(router, mongoInstance)
 
 	srv := &http.Server{
 		Addr:    ":7000",
