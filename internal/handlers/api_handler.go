@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -63,89 +62,89 @@ func NewAPIHandler(mongoInstance db.MongoInstance) *APIHandler {
 }
 
 func (h *APIHandler) getAPILogs(c *gin.Context) {
-	pageStr := c.DefaultQuery("page", "1")
-	limitStr := c.DefaultQuery("limit", "10")
-	searchQuery := c.Query("query")
-	searchHostname := c.Query("hostname")
-	hasPiiStr := c.Query("has_pii")
-	riskLevel := c.Query("risk_level")
+    pageStr := c.DefaultQuery("page", "1")
+    limitStr := c.DefaultQuery("limit", "10")
+    searchQuery := c.Query("query")
+    searchHostname := c.Query("hostname")
+    method := c.Query("method")
+    hasPiiStr := c.Query("has_pii")
+    riskLevel := c.Query("risk_level")
 
-	page, err := strconv.Atoi(pageStr)
-	if err != nil || page < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page number"})
-		return
-	}
+    page, err := strconv.Atoi(pageStr)
+    if err != nil || page < 1 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page number"})
+        return
+    }
 
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit < 1 || limit > 100 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit"})
-		return
-	}
-	skip := (page - 1) * limit
-	filter := bson.M{}
-	orConditions := []bson.M{}
+    limit, err := strconv.Atoi(limitStr)
+    if err != nil || limit < 1 || limit > 100 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit"})
+        return
+    }
+    skip := (page - 1) * limit
+    filter := bson.M{}
 
-	if searchQuery != "" {
-		orConditions = append(orConditions,
-			bson.M{"api_endpoint": bson.M{"$regex": primitive.Regex{Pattern: searchQuery, Options: "i"}}},
-			bson.M{"url": bson.M{"$regex": primitive.Regex{Pattern: searchQuery, Options: "i"}}},
-			bson.M{"method": bson.M{"$regex": primitive.Regex{Pattern: searchQuery, Options: "i"}}},
-		)
-	}
+    if searchQuery != "" {
+        filter["$or"] = []bson.M{
+            {"api_endpoint": bson.M{"$regex": primitive.Regex{Pattern: searchQuery, Options: "i"}}},
+            {"url": bson.M{"$regex": primitive.Regex{Pattern: searchQuery, Options: "i"}}},
+        }
+    }
 
-	if searchHostname != "" {
-		hostnameRegexPattern := fmt.Sprintf("://[^/]*%s[^/]*($|/)", regexp.QuoteMeta(searchHostname))
-		orConditions = append(orConditions, bson.M{"url": bson.M{"$regex": primitive.Regex{Pattern: hostnameRegexPattern, Options: "i"}}})
-	}
+    // Fix hostname search
+    if searchHostname != "" {
+        filter["url"] = bson.M{"$regex": primitive.Regex{Pattern: searchHostname, Options: "i"}}
+    }
+    if method != "" {
+        filter["method"] = bson.M{"$regex": primitive.Regex{Pattern: "^" + regexp.QuoteMeta(method) + "$", Options: "i"}}
+    }
 
-	if len(orConditions) > 0 {
-		filter["$or"] = orConditions
-	}
+    if hasPiiStr != "" {
+        hasPiiBool, parseErr := strconv.ParseBool(hasPiiStr)
+        if parseErr != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid value for has_pii. Must be 'true' or 'false'."})
+            return
+        }
+        filter["has_pii"] = hasPiiBool
+    }
 
-	if hasPiiStr != "" {
-		hasPiiBool, parseErr := strconv.ParseBool(hasPiiStr)
-		if parseErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid value for has_pii. Must be 'true' or 'false'."})
-			return
-		}
-		filter["has_pii"] = hasPiiBool
-	}
+    if riskLevel != "" {
+        filter["highest_risk"] = riskLevel
+    }
+    log.Printf("Applied filters: %+v", filter)
 
-	if riskLevel != "" {
-		filter["highest_risk"] = riskLevel
-	}
+    collection := h.mongo.GetCollection("user_api_data")
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
 
-	collection := h.mongo.GetCollection("user_api_data")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+    total, err := collection.CountDocuments(ctx, filter)
+    if err != nil {
+        log.Printf("Failed to count documents: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve total count"})
+        return
+    }
+    
+    findOptions := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit)).SetSort(bson.D{{Key: "timestamp", Value: -1}})
+    cursor, err := collection.Find(ctx, filter, findOptions)
+    if err != nil {
+        log.Printf("Failed to find API data: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API data"})
+        return
+    }
+    defer cursor.Close(ctx)
 
-	total, err := collection.CountDocuments(ctx, filter)
-	if err != nil {
-		log.Printf("Failed to count documents: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve total count"})
-		return
-	}
-	findOptions := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit)).SetSort(bson.D{{Key: "timestamp", Value: -1}})
-	cursor, err := collection.Find(ctx, filter, findOptions)
-	if err != nil {
-		log.Printf("Failed to find API data: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API data"})
-		return
-	}
-	defer cursor.Close(ctx)
+    var apiData []UserAPIData
+    if err := cursor.All(ctx, &apiData); err != nil {
+        log.Printf("Failed to decode API data: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode API data"})
+        return
+    }
 
-	var apiData []UserAPIData
-	if err := cursor.All(ctx, &apiData); err != nil {
-		log.Printf("Failed to decode API data: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode API data"})
-		return
-	}
-
-	response := PaginatedResponse{
-		Items: apiData,
-		Total: total,
-	}
-	c.JSON(http.StatusOK, response)
+    response := PaginatedResponse{
+        Items: apiData,
+        Total: total,
+    }
+    c.JSON(http.StatusOK, response)
 }
 
 func (h *APIHandler) getAPILog(c *gin.Context) {
